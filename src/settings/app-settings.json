@@ -1,0 +1,13 @@
+{
+  "name": "Rasta Memo",
+  "shortName": "RastaMemo",
+  "subtitle": "Rasta Memory Card Game",
+  "description": "Match pairs of rasta-themed cards in this 8-bit memory game. Flip cards, find matches, beat levels, and vibe to reggae music. How far can you go?",
+  "shortDescription": "Rasta-themed 8-bit memory matching game",
+  "primaryCategory": "games",
+  "tags": ["game", "memory", "rasta", "reggae", "cards"],
+  "splashBackgroundColor": "#1a3a1a",
+  "tagline": "Match the vibes, mon!",
+  "requiredChains": [],
+  "shareButtonTitle": "Play Rasta Memo"
+}
