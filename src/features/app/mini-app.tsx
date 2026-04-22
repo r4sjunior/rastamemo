@@ -89,6 +89,9 @@ export function MiniApp() {
   const scoreSavedRef = useRef(false);
 
   const { data: user } = useFarcasterUser();
+// MiniPay hook — detects if running inside Celo MiniPay
+const isMiniPay = typeof window !== "undefined" && 
+  !!(window as any)?.ethereum?.isMiniPay;
   const fid = user?.fid ?? 0;
 
   const firstCardRef = useRef<Card | null>(null);
