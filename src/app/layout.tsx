@@ -30,8 +30,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* ✅ META TAG DE VERIFICAÇÃO */}
+        <meta
+          name="talentapp:project_verification"
+          content="9db0e048c7d9a92f78dbcad23bf4b5e6ab79077300f82c2c9ea3909605be8ebd41cda62ce97531535dad214364f92b3da46b103a0bf46525f84bd1efe24e1ee0"
+        />
+
         <ThemeClient />
       </head>
+
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${caveat.variable} ${patrickHand.variable} antialiased`}
       >
