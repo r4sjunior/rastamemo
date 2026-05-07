@@ -89,9 +89,6 @@ export function MiniApp() {
   const scoreSavedRef = useRef(false);
 
   const { data: user } = useFarcasterUser();
-// MiniPay hook — detects if running inside Celo MiniPay
-const isMiniPay = typeof window !== "undefined" && 
-  !!(window as any)?.ethereum?.isMiniPay;
   const fid = user?.fid ?? 0;
 
   const firstCardRef = useRef<Card | null>(null);
@@ -125,7 +122,7 @@ const isMiniPay = typeof window !== "undefined" &&
     if (lock || card.flipped || card.matched) return;
     if (firstCardRef.current?.uid === card.uid) return;
 
-    startMusic();
+    if (!muted) startMusic();
 
     // Flip the card visually
     setCards(prev =>
