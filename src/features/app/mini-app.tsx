@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ShareButton, useFarcasterUser } from "@/neynar-farcaster-sdk/mini";
 import { CARD_POOL, BACK_FACE_URL } from "@/features/app/components/card-data";
-import { Leaderboard } from "@/features/app/components/leaderboard";
+import { LeaderboardOnChain } from "@/features/app/components/leaderboard-onchain";
+import { SubmitScoreWidget } from "@/features/app/components/submit-score-widget";
 
 const LOGO_URL =
   "https://remix.gg/blob/409848fd-a78f-43b9-bde4-3fd5d7371865/rasta-memo-white-kVSNuM5rtL-gQiXRqVDAa5WYGzTqA9Ec5O9lwScQ2.webp?8HV6";
@@ -392,7 +393,7 @@ export function MiniApp() {
 
       {/* LEADERBOARD */}
       {showLeaderboard && (
-        <Leaderboard
+        <LeaderboardOnChain
           currentFid={fid}
           onClose={() => setShowLeaderboard(false)}
         />
@@ -471,6 +472,7 @@ export function MiniApp() {
             </button>
             {phase === "game-over" && (
               <>
+                <SubmitScoreWidget fid={fid} score={score} level={level} />
                 <button
                   onClick={() => setShowLeaderboard(true)}
                   style={{

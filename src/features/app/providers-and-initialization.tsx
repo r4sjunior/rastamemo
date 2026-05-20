@@ -3,11 +3,13 @@
 import { ReactNode, useState } from "react";
 import { Provider as JotaiProvider } from "jotai";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { WagmiProvider } from "wagmi";
 import {
   InitializeFarcasterMiniApp,
   useInitializeFarcasterApp,
 } from "@/neynar-farcaster-sdk/mini";
 import { Toaster } from "@neynar/ui";
+import { wagmiConfig } from "@/lib/celo-config";
 
 export function ProvidersAndInitialization({
   children,
@@ -18,6 +20,7 @@ export function ProvidersAndInitialization({
   const [queryClient] = useState(() => new QueryClient());
 
   return (
+    <WagmiProvider config={wagmiConfig}>
     <JotaiProvider>
       <QueryClientProvider client={queryClient}>
         {/* LLMs: Add additional providers between here */}
@@ -29,5 +32,6 @@ export function ProvidersAndInitialization({
         {/* End Do not remove */}
       </QueryClientProvider>
     </JotaiProvider>
+    </WagmiProvider>
   );
 }
