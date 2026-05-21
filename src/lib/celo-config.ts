@@ -7,21 +7,18 @@ import { celo } from "viem/chains";
 import { injected, walletConnect, coinbaseWallet } from "wagmi/connectors";
 import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 
-// ─── WalletConnect Project ID ──────────────────────────────────────────────────
-// Crie grátis em: https://cloud.walletconnect.com
-// Depois adicione ao .env.local:  NEXT_PUBLIC_WC_PROJECT_ID=seu_id_aqui
 const WC_PROJECT_ID = process.env.NEXT_PUBLIC_WC_PROJECT_ID ?? "";
 
 export const wagmiConfig = createConfig({
   chains: [celo],
   connectors: [
-    // 1. MiniPay — Celo nativo, já conectado e já na rede certa
-    injected({ target: "metaMask" }),         // cobre MetaMask e MiniPay (ambos injetam window.ethereum)
-
-    // 2. Farcaster — carteira nativa do mini-app
+    // 1. Farcaster — carteira nativa do mini-app (primeiro para prioridade)
     farcasterMiniApp(),
 
-    // 3. WalletConnect — QR code, funciona em qualquer mobile
+    // 2. MiniPay / MetaMask — injected (window.ethereum)
+    injected({ target: "metaMask" }),
+
+    // 3. WalletConnect — QR code
     ...(WC_PROJECT_ID
       ? [walletConnect({ projectId: WC_PROJECT_ID })]
       : []),
@@ -32,10 +29,12 @@ export const wagmiConfig = createConfig({
   transports: {
     [celo.id]: http("https://forno.celo.org"),
   },
+  // FIX: ssr: true é obrigatório no Next.js para evitar
+  // "Provider not found" durante hidratação server-side
+  ssr: true,
 });
 
 // ─── Contrato RastaLeaderboard ────────────────────────────────────────────────
-// ⚠️  Após o deploy na Celo, substitua pelo endereço real
 export const LEADERBOARD_ADDRESS =
   (process.env.NEXT_PUBLIC_LEADERBOARD_ADDRESS ??
    "0x0000000000000000000000000000000000000000") as `0x${string}`;
@@ -113,11 +112,18 @@ export const LEADERBOARD_ABI = [
     name: "ScoreSubmitted",
     type: "event",
     inputs: [
-      { name: "player",       type: "address", indexed: true },
-      { name: "fid",          type: "uint256", indexed: true },
+      { name: "player",       type: "address", indexed: true  },
+      { name: "fid",          type: "uint256", indexed: true  },
       { name: "score",        type: "uint256", indexed: false },
       { name: "level",        type: "uint256", indexed: false },
       { name: "enteredTop10", type: "bool",    indexed: false },
     ],
+  },
+  {
+    name: "resetLeaderboard",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
   },
 ] as const;
