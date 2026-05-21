@@ -11,27 +11,30 @@ import {
 import { Toaster } from "@neynar/ui";
 import { wagmiConfig } from "@/lib/celo-config";
 
+// FIX: useInitializeFarcasterApp precisa estar DENTRO do WagmiProvider.
+// Extraído para componente filho para garantir isso.
+function AppInitializer() {
+  useInitializeFarcasterApp();
+  return <InitializeFarcasterMiniApp />;
+}
+
 export function ProvidersAndInitialization({
   children,
 }: {
   children: ReactNode;
 }) {
-  useInitializeFarcasterApp();
   const [queryClient] = useState(() => new QueryClient());
 
   return (
     <WagmiProvider config={wagmiConfig}>
-    <JotaiProvider>
-      <QueryClientProvider client={queryClient}>
-        {/* LLMs: Add additional providers between here */}
-        <Toaster position="top-center" richColors />
-        {/* and here */}
-        {/* LLMs: Do not remove, initialization must be last, before children */}
-        <InitializeFarcasterMiniApp />
-        {children}
-        {/* End Do not remove */}
-      </QueryClientProvider>
-    </JotaiProvider>
+      <JotaiProvider>
+        <QueryClientProvider client={queryClient}>
+          <Toaster position="top-center" richColors />
+          {/* AppInitializer agora está dentro do WagmiProvider */}
+          <AppInitializer />
+          {children}
+        </QueryClientProvider>
+      </JotaiProvider>
     </WagmiProvider>
   );
 }
