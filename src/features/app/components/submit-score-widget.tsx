@@ -1,49 +1,74 @@
 "use client";
 
 // src/features/app/components/submit-score-widget.tsx
-// Botão de mint do score on-chain — usa useSubmitScore corrigido.
+// Botão de mint do score on-chain — usa useSubmitScore.
 
 import { useSubmitScore } from "@/hooks/use-submit-score";
+import { CONTRACT_DEPLOYED } from "@/lib/celo-config";
+
+const F = "'Press Start 2P', monospace";
 
 type Props = {
-  fid:   number;
+  fid: number;
   score: number;
   level: number;
 };
 
-const LABEL: Record<string, string> = {
-  idle:              "⛓️ MINT SCORE",
-  connecting:        "🔌 CONECTANDO...",
-  switching:         "🔄 TROCANDO REDE...",
-  confirming:        "✍️ CONFIRME NA WALLET",
-  pending:           "⏳ AGUARDANDO...",
-  success:           "✅ SCORE MINTADO!",
-  "not-personal-best": "🏅 JÁ É SEU RECORDE",
-  error:             "❌ ERRO — TENTAR DE NOVO",
-};
+const LABELS = {
+  idle:               "⛓ MINT SCORE — 0.01 CELO",
+  "not-deployed":     "⛓ MINT SCORE — 0.01 CELO",
+  connecting:         "⏳ Conectando carteira...",
+  switching:          "⏳ Trocando para Celo...",
+  confirming:         "⏳ Confirme na carteira...",
+  pending:            "⏳ Aguardando confirmação...",
+  success:            "✅ SCORE REGISTRADO!",
+  "not-personal-best":"🔒 Já tens score melhor on-chain",
+  error:              "❌ Tentar novamente",
+} as const;
 
-const COLOR: Record<string, string> = {
-  idle:              "linear-gradient(135deg, #a855f7, #7c3aed)",
-  connecting:        "linear-gradient(135deg, #6366f1, #4338ca)",
-  switching:         "linear-gradient(135deg, #f59e0b, #d97706)",
-  confirming:        "linear-gradient(135deg, #f59e0b, #d97706)",
-  pending:           "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-  success:           "linear-gradient(135deg, #22c55e, #15803d)",
-  "not-personal-best": "linear-gradient(135deg, #6b7280, #374151)",
-  error:             "linear-gradient(135deg, #ef4444, #b91c1c)",
-};
+const BG = {
+  idle:               "linear-gradient(135deg,#22c55e,#15803d)",
+  "not-deployed":     "rgba(255,255,255,0.06)",
+  connecting:         "rgba(255,255,255,0.06)",
+  switching:          "rgba(255,255,255,0.06)",
+  confirming:         "rgba(255,255,255,0.06)",
+  pending:            "rgba(255,255,255,0.06)",
+  success:            "linear-gradient(135deg,#FFD700,#b8860b)",
+  "not-personal-best":"rgba(255,255,255,0.06)",
+  error:              "linear-gradient(135deg,#ef4444,#b91c1c)",
+} as const;
+
+const DISABLED_STATUSES = [
+  "connecting","switching","confirming","pending","success","not-personal-best","not-deployed",
+] as const;
 
 export function SubmitScoreWidget({ fid, score, level }: Props) {
   const { status, txHash, error, enteredTop10, submit, reset } =
     useSubmitScore({ fid, score, level });
 
-  const isBusy = ["connecting", "switching", "confirming", "pending"].includes(status);
-  const isDone = status === "success" || status === "not-personal-best";
+  const isDisabled = (DISABLED_STATUSES as readonly string[]).includes(status);
+
+  // Contrato não deployado ainda — mostra aviso sutil
+  if (!CONTRACT_DEPLOYED) {
+    return (
+      <div style={{
+        width: "100%", padding: "10px", borderRadius: "10px",
+        border: "1px dashed #2d5a2d", background: "rgba(0,0,0,.3)",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
+      }}>
+        <span style={{ fontFamily: F, fontSize: "7px", color: "#4a7a4a" }}>
+          ⛓ Ranking on-chain em breve
+        </span>
+        <span style={{ fontFamily: F, fontSize: "5px", color: "#2d5a2d", textAlign: "center", lineHeight: 1.8 }}>
+          Contrato não deployado ainda
+        </span>
+      </div>
+    );
+  }
 
   function handleClick() {
-    if (isBusy) return;
+    if (isDisabled && status !== "error") return;
     if (status === "error") { reset(); return; }
-    if (isDone) return;
     void submit();
   }
 
@@ -51,58 +76,33 @@ export function SubmitScoreWidget({ fid, score, level }: Props) {
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "6px" }}>
       <button
         onClick={handleClick}
-        disabled={isBusy || isDone}
+        disabled={isDisabled && status !== "error"}
         style={{
-          width: "100%",
-          padding: "12px",
-          borderRadius: "12px",
-          border: "none",
-          background: COLOR[status] ?? COLOR.idle,
-          color: "#fff",
-          fontSize: "9px",
-          cursor: isBusy || isDone ? "default" : "pointer",
-          fontFamily: "'Press Start 2P', monospace",
+          width: "100%", padding: "12px", borderRadius: "12px",
+          border: status === "success" ? "2px solid #FFD700" : "1px solid rgba(255,255,255,0.1)",
+          background: BG[status], color: "#fff", fontSize: "9px",
+          fontFamily: F, cursor: (isDisabled && status !== "error") ? "not-allowed" : "pointer",
           minHeight: "44px",
-          opacity: isBusy ? 0.8 : 1,
-          transition: "opacity 0.2s",
+          opacity: isDisabled && !["success","not-personal-best","error"].includes(status) ? 0.7 : 1,
+          transition: "all 0.2s",
         }}
       >
-        {LABEL[status] ?? "⛓️ MINT SCORE"}
+        {LABELS[status]}
       </button>
 
-      {/* Mensagem de erro */}
-      {status === "error" && error && (
-        <div style={{
-          fontSize: "8px",
-          color: "#ef4444",
-          textAlign: "center",
-          padding: "4px 8px",
-          background: "rgba(239,68,68,0.1)",
-          borderRadius: "6px",
-          border: "1px solid rgba(239,68,68,0.3)",
-        }}>
-          {error}
-          <span style={{ color: "#a3c4a3", marginLeft: "4px" }}>(clique para tentar de novo)</span>
-        </div>
+      {status === "idle" && (
+        <p style={{ fontFamily: F, fontSize: "6px", color: "#a3c4a3", textAlign: "center", margin: 0, lineHeight: 1.8 }}>
+          Ranking on-chain unificado · Celo
+        </p>
       )}
 
-      {/* Sucesso: link da tx + top-10 */}
       {status === "success" && (
-        <div style={{
-          fontSize: "8px",
-          color: "#22c55e",
-          textAlign: "center",
-          display: "flex",
-          flexDirection: "column",
-          gap: "4px",
-        }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
           {enteredTop10 && (
             <div style={{
-              padding: "4px 8px",
-              background: "rgba(255,215,0,0.15)",
-              border: "1px solid #FFD700",
-              borderRadius: "6px",
-              color: "#FFD700",
+              fontFamily: F, fontSize: "7px", color: "#FFD700",
+              background: "rgba(255,215,0,0.12)", border: "1px solid #FFD700",
+              borderRadius: "6px", padding: "4px 10px",
             }}>
               🏆 ENTROU NO TOP 10!
             </div>
@@ -112,19 +112,24 @@ export function SubmitScoreWidget({ fid, score, level }: Props) {
               href={`https://celoscan.io/tx/${txHash}`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: "#60a5fa", textDecoration: "underline" }}
+              style={{ fontFamily: F, fontSize: "6px", color: "#FFD700", textAlign: "center", textDecoration: "underline" }}
             >
-              ver tx no celoscan ↗
+              Ver no Celoscan ↗
             </a>
           )}
         </div>
       )}
 
-      {/* Preço */}
-      {status === "idle" && (
-        <div style={{ fontSize: "7px", color: "#6b7280", textAlign: "center" }}>
-          0.01 CELO · Celo Mainnet
-        </div>
+      {status === "error" && error && (
+        <p style={{ fontFamily: F, fontSize: "6px", color: "#ef4444", textAlign: "center", margin: 0, lineHeight: 1.8 }}>
+          {error} <span style={{ color: "#a3c4a3" }}>(clique para tentar de novo)</span>
+        </p>
+      )}
+
+      {status === "not-personal-best" && (
+        <p style={{ fontFamily: F, fontSize: "6px", color: "#a3c4a3", textAlign: "center", margin: 0, lineHeight: 1.8 }}>
+          Jogue melhor para superar seu recorde!
+        </p>
       )}
     </div>
   );
