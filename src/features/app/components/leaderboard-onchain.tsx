@@ -1,10 +1,8 @@
 "use client";
 // src/features/app/components/leaderboard-onchain.tsx
-// Leaderboard lido direto do contrato na Celo.
-// Mantém o mesmo estilo visual do leaderboard original.
 
 import { useReadContract, useAccount } from "wagmi";
-import { LEADERBOARD_ADDRESS, LEADERBOARD_ABI } from "@/lib/celo-config";
+import { LEADERBOARD_ADDRESS, LEADERBOARD_ABI, CONTRACT_DEPLOYED } from "@/lib/celo-config";
 
 const F = "'Press Start 2P', monospace";
 
@@ -28,9 +26,9 @@ function shortAddr(addr: string) {
 function timeAgo(ts: bigint): string {
   const s = Math.floor(Date.now() / 1000) - Number(ts);
   if (s < 60)    return "agora";
-  if (s < 3600)  return `${Math.floor(s / 60)}min`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h`;
-  return `${Math.floor(s / 86400)}d`;
+  if (s < 3600)  return `${Math.floor(s / 60)}min atrás`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h atrás`;
+  return `${Math.floor(s / 86400)}d atrás`;
 }
 
 export function LeaderboardOnChain({ currentFid, onClose }: Props) {
@@ -40,6 +38,7 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
     address: LEADERBOARD_ADDRESS,
     abi: LEADERBOARD_ABI,
     functionName: "getLeaderboardActive",
+    query: { enabled: CONTRACT_DEPLOYED },
   });
 
   const { data: myRankData } = useReadContract({
@@ -47,7 +46,7 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
     abi: LEADERBOARD_ABI,
     functionName: "getRankOf",
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    query: { enabled: CONTRACT_DEPLOYED && !!address },
   });
 
   const { data: myBestData } = useReadContract({
@@ -55,12 +54,12 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
     abi: LEADERBOARD_ABI,
     functionName: "getBestByWallet",
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    query: { enabled: CONTRACT_DEPLOYED && !!address },
   });
 
-  const myBest  = myBestData?.[1] ? myBestData[0] : null;
-  const myRank  = myRankData && myRankData > 0 ? myRankData : null;
-  const list    = (entries ?? []) as ChainEntry[];
+  const myBest = myBestData?.[1] ? myBestData[0] : null;
+  const myRank = myRankData && myRankData > 0 ? myRankData : null;
+  const list   = (entries ?? []) as ChainEntry[];
 
   return (
     <div
@@ -87,7 +86,9 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div>
             <div style={{ fontFamily: F, fontSize: "12px", color: "#FFD700" }}>🏆 TOP 10</div>
-            <div style={{ fontFamily: F, fontSize: "6px", color: "#4CAF50", marginTop: "3px" }}>⛓ on-chain · Celo</div>
+            <div style={{ fontFamily: F, fontSize: "6px", color: "#4CAF50", marginTop: "3px" }}>
+              ⛓ on-chain · Celo
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -101,43 +102,53 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
           </button>
         </div>
 
-        {/* Meu melhor (se tiver) */}
+        {/* Contrato não deployado */}
+        {!CONTRACT_DEPLOYED && (
+          <div style={{ fontFamily: F, fontSize: "7px", color: "#4a7a4a", textAlign: "center", padding: "20px 0", lineHeight: 2 }}>
+            Contrato ainda não deployado.{"\n"}
+            Deploy o RastaLeaderboard.sol na Celo e adicione o endereço ao .env.local
+          </div>
+        )}
+
+        {/* Meu melhor */}
         {myBest && (
-          <div
-            style={{
-              background: "rgba(255,215,0,0.08)", border: "2px solid #FFD700",
-              borderRadius: "10px", padding: "10px 14px",
-              display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
-            }}
-          >
+          <div style={{
+            background: "rgba(255,215,0,0.08)", border: "2px solid #FFD700",
+            borderRadius: "10px", padding: "10px 14px",
+            display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
+          }}>
             <div>
               <div style={{ fontFamily: F, fontSize: "7px", color: "#a3c4a3", marginBottom: "4px" }}>
                 {myRank ? `🏅 RANK #${myRank}` : "SEU MELHOR"}
               </div>
-              <div style={{ fontFamily: F, fontSize: "6px", color: "#22c55e" }}>LVL {myBest.level.toString()}</div>
+              <div style={{ fontFamily: F, fontSize: "6px", color: "#22c55e" }}>
+                LVL {myBest.level.toString()}
+              </div>
               <div style={{ fontFamily: F, fontSize: "5px", color: "#4a7a4a", marginTop: "2px" }}>
-                {shortAddr(myBest.player)} · {timeAgo(myBest.submittedAt)} atrás
+                {shortAddr(myBest.player)} · {timeAgo(myBest.submittedAt)}
               </div>
             </div>
-            <div style={{ fontFamily: F, fontSize: "16px", color: "#FFD700" }}>{myBest.score.toString()}</div>
+            <div style={{ fontFamily: F, fontSize: "16px", color: "#FFD700" }}>
+              {myBest.score.toString()}
+            </div>
           </div>
         )}
 
         {/* Lista */}
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          {isLoading && (
+          {CONTRACT_DEPLOYED && isLoading && (
             <div style={{ fontFamily: F, fontSize: "8px", color: "#a3c4a3", textAlign: "center", padding: "20px 0" }}>
               ⏳ Lendo a Celo...
             </div>
           )}
 
-          {error && (
+          {CONTRACT_DEPLOYED && error && (
             <div style={{ fontFamily: F, fontSize: "7px", color: "#ef4444", textAlign: "center", padding: "16px 0", lineHeight: 2 }}>
-              Erro ao conectar na Celo.
+              Erro ao conectar na Celo.{"\n"}Verifique sua rede.
             </div>
           )}
 
-          {!isLoading && !error && list.length === 0 && (
+          {CONTRACT_DEPLOYED && !isLoading && !error && list.length === 0 && (
             <div style={{ fontFamily: F, fontSize: "8px", color: "#a3c4a3", textAlign: "center", padding: "20px 0", lineHeight: 2.5 }}>
               Sem scores ainda!{"\n"}Seja o primeiro, mon 🌿
             </div>
