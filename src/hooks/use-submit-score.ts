@@ -1,209 +1,114 @@
 "use client";
+// src/features/app/components/submit-score-widget.tsx
 
-// src/hooks/use-submit-score.ts
+import { useSubmitScore, SubmitStatus } from "@/hooks/use-submit-score";
+import { CONTRACT_DEPLOYED } from "@/lib/celo-config";
 
-import { useEffect, useState, useRef } from "react";
-import {
-  useAccount,
-  useConnect,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-  useSwitchChain,
-  useChainId,
-} from "wagmi";
-import { celo } from "viem/chains";
-import {
-  LEADERBOARD_ADDRESS,
-  LEADERBOARD_ABI,
-  SUBMIT_PRICE_WEI,
-} from "@/lib/celo-config";
-import { detectPlatform } from "@/lib/platform-detect";
+const F = "'Press Start 2P', monospace";
 
-export type SubmitStatus =
-  | "idle"
-  | "connecting"
-  | "switching"
-  | "confirming"
-  | "pending"
-  | "success"
-  | "not-personal-best"
-  | "error";
-
-export type SubmitState = {
-  status: SubmitStatus;
-  txHash?: `0x${string}`;
-  error?: string;
-  enteredTop10?: boolean;
-  submit: () => Promise<void>;
-  reset: () => void;
-};
-
-type Options = {
+type Props = {
   fid: number;
   score: number;
   level: number;
-  autoSubmit?: boolean;
 };
 
-export function useSubmitScore({ fid, score, level, autoSubmit }: Options): SubmitState {
-  const [status, setStatus]      = useState<SubmitStatus>("idle");
-  const [error, setError]        = useState<string | undefined>();
-  const [enteredTop10, setTop10] = useState<boolean | undefined>();
-  const pendingChainWrite        = useRef(false);
+const LABELS: Record<SubmitStatus, string> = {
+  idle:               "⛓ SUBMIT SCORE — 0.01 CELO",
+  "not-deployed":     "⛓ SUBMIT SCORE — 0.01 CELO",
+  connecting:         "⏳ Conectando carteira...",
+  switching:          "⏳ Trocando para Celo...",
+  confirming:         "⏳ Confirme na carteira...",
+  pending:            "⏳ Aguardando confirmação...",
+  success:            "✅ SCORE REGISTRADO!",
+  "not-personal-best":"🔒 Já tens score melhor on-chain",
+  error:              "❌ Tentar novamente",
+};
 
-  // FIX: todos os hooks wagmi são chamados incondicionalmente —
-  // o guard de "contrato não deployado" é feito dentro das funções,
-  // nunca antes dos hooks (violaria regras do React).
-  const chainId                      = useChainId();
-  const { isConnected }              = useAccount();
-  const { connectAsync, connectors } = useConnect();
-  const { switchChainAsync }         = useSwitchChain();
+const BG: Record<SubmitStatus, string> = {
+  idle:               "linear-gradient(135deg,#22c55e,#15803d)",
+  "not-deployed":     "rgba(255,255,255,0.06)",
+  connecting:         "rgba(255,255,255,0.06)",
+  switching:          "rgba(255,255,255,0.06)",
+  confirming:         "rgba(255,255,255,0.06)",
+  pending:            "rgba(255,255,255,0.06)",
+  success:            "linear-gradient(135deg,#FFD700,#b8860b)",
+  "not-personal-best":"rgba(255,255,255,0.06)",
+  error:              "linear-gradient(135deg,#ef4444,#b91c1c)",
+};
 
-  const {
-    writeContractAsync,
-    data:      txHash,
-    isPending: isSendPending,
-    error:     writeError,
-    reset:     resetWrite,
-  } = useWriteContract();
+const DISABLED: SubmitStatus[] = [
+  "connecting","switching","confirming","pending","success","not-personal-best","not-deployed",
+];
 
-  const {
-    isLoading: isPending,
-    isSuccess,
-    data: receipt,
-  } = useWaitForTransactionReceipt({ hash: txHash });
+export function SubmitScoreWidget({ fid, score, level }: Props) {
+  const { status, txHash, error, submit } = useSubmitScore({ fid, score, level });
 
-  useEffect(() => { if (isSendPending) setStatus("confirming"); }, [isSendPending]);
-  useEffect(() => { if (isPending)     setStatus("pending");    }, [isPending]);
+  const isDisabled = DISABLED.includes(status);
 
-  useEffect(() => {
-    if (isSuccess && receipt) {
-      setTop10(receipt.logs.length > 0);
-      setStatus("success");
-    }
-  }, [isSuccess, receipt]);
-
-  useEffect(() => {
-    if (writeError) {
-      const msg = writeError.message ?? "";
-      if (msg.includes("personal best")) {
-        setStatus("not-personal-best");
-      } else {
-        setError(
-          msg.includes("rejected") || msg.includes("User rejected")
-            ? "Transação rejeitada."
-            : msg.slice(0, 120)
-        );
-        setStatus("error");
-      }
-    }
-  }, [writeError]);
-
-  useEffect(() => {
-    if (isConnected && pendingChainWrite.current) {
-      pendingChainWrite.current = false;
-      void doChainAndWrite();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected]);
-
-  async function doChainAndWrite() {
-    // Guard: contrato não deployado
-    if (LEADERBOARD_ADDRESS === "0x0000000000000000000000000000000000000000") {
-      setError("Contrato não deployado. Configure NEXT_PUBLIC_LEADERBOARD_ADDRESS.");
-      setStatus("error");
-      return;
-    }
-
-    if (chainId !== celo.id) {
-      setStatus("switching");
-      try {
-        await switchChainAsync({ chainId: celo.id });
-      } catch {
-        setError("Falha ao trocar para a rede Celo.");
-        setStatus("error");
-        return;
-      }
-    }
-
-    setStatus("confirming");
-    try {
-      await writeContractAsync({
-        address:      LEADERBOARD_ADDRESS,
-        abi:          LEADERBOARD_ABI,
-        functionName: "submitScore",
-        args:         [BigInt(fid), BigInt(score), BigInt(level)],
-        value:        SUBMIT_PRICE_WEI,
-      });
-    } catch (e: unknown) {
-      if (status === "confirming") {
-        setError(e instanceof Error ? e.message.slice(0, 120) : "Erro inesperado.");
-        setStatus("error");
-      }
-    }
+  // Contrato não deployado ainda — mostra aviso sutil
+  if (status === "not-deployed" || !CONTRACT_DEPLOYED) {
+    return (
+      <div style={{
+        width: "100%", padding: "10px", borderRadius: "10px",
+        border: "1px dashed #2d5a2d", background: "rgba(0,0,0,.3)",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
+      }}>
+        <span style={{ fontFamily: F, fontSize: "7px", color: "#4a7a4a" }}>
+          ⛓ Ranking on-chain em breve
+        </span>
+        <span style={{ fontFamily: F, fontSize: "5px", color: "#2d5a2d", textAlign: "center", lineHeight: 1.8 }}>
+          Contrato não deployado ainda
+        </span>
+      </div>
+    );
   }
 
-  async function submit() {
-    if (score <= 0) { setStatus("not-personal-best"); return; }
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "6px" }}>
+      <button
+        onClick={() => void submit()}
+        disabled={isDisabled}
+        style={{
+          width: "100%", padding: "12px", borderRadius: "12px",
+          border: status === "success" ? "2px solid #FFD700" : "1px solid rgba(255,255,255,0.1)",
+          background: BG[status], color: "#fff", fontSize: "9px",
+          fontFamily: F, cursor: isDisabled ? "not-allowed" : "pointer",
+          minHeight: "44px",
+          opacity: isDisabled && !["success","not-personal-best"].includes(status) ? 0.7 : 1,
+          transition: "all 0.2s",
+        }}
+      >
+        {LABELS[status]}
+      </button>
 
-    setError(undefined);
-    resetWrite();
+      {status === "idle" && (
+        <p style={{ fontFamily: F, fontSize: "6px", color: "#a3c4a3", textAlign: "center", margin: 0, lineHeight: 1.8 }}>
+          Ranking on-chain unificado · Celo
+        </p>
+      )}
 
-    if (isConnected) {
-      await doChainAndWrite();
-      return;
-    }
+      {status === "success" && txHash && (
+        <a
+          href={`https://celoscan.io/tx/${txHash}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ fontFamily: F, fontSize: "6px", color: "#FFD700", textAlign: "center", textDecoration: "underline" }}
+        >
+          Ver no Celoscan ↗
+        </a>
+      )}
 
-    setStatus("connecting");
+      {status === "error" && error && (
+        <p style={{ fontFamily: F, fontSize: "6px", color: "#ef4444", textAlign: "center", margin: 0, lineHeight: 1.8 }}>
+          {error}
+        </p>
+      )}
 
-    const platform = detectPlatform();
-    let targetConnector = connectors[0];
-
-    if (platform === "farcaster") {
-      targetConnector =
-        connectors.find(c => c.id === "farcasterMiniApp") ?? connectors[0];
-    } else if (platform === "minipay") {
-      targetConnector =
-        connectors.find(c => c.id === "injected" || c.id === "metaMask") ?? connectors[0];
-    } else {
-      targetConnector =
-        connectors.find(c => c.id === "metaMask") ??
-        connectors.find(c => c.id === "walletConnect") ??
-        connectors[0];
-    }
-
-    if (!targetConnector) {
-      setError("Nenhuma carteira disponível.");
-      setStatus("error");
-      return;
-    }
-
-    try {
-      await connectAsync({ connector: targetConnector });
-      pendingChainWrite.current = true;
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "";
-      setError(
-        msg.includes("rejected") || msg.includes("User rejected")
-          ? "Conexão rejeitada."
-          : msg.slice(0, 120) || "Falha ao conectar carteira."
-      );
-      setStatus("error");
-    }
-  }
-
-  function reset() {
-    setStatus("idle");
-    setError(undefined);
-    setTop10(undefined);
-    pendingChainWrite.current = false;
-    resetWrite();
-  }
-
-  useEffect(() => {
-    if (autoSubmit && status === "idle" && score > 0) void submit();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSubmit]);
-
-  return { status, txHash, error, enteredTop10, submit, reset };
+      {status === "not-personal-best" && (
+        <p style={{ fontFamily: F, fontSize: "6px", color: "#a3c4a3", textAlign: "center", margin: 0, lineHeight: 1.8 }}>
+          Jogue melhor para superar seu recorde!
+        </p>
+      )}
+    </div>
+  );
 }
