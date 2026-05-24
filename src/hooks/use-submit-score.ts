@@ -1,114 +1,219 @@
 "use client";
-// src/features/app/components/submit-score-widget.tsx
+// src/hooks/use-submit-score.ts
 
-import { useSubmitScore, SubmitStatus } from "@/hooks/use-submit-score";
-import { CONTRACT_DEPLOYED } from "@/lib/celo-config";
+import { useEffect, useState } from "react";
+import {
+  useAccount,
+  useConnect,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  useSwitchChain,
+  useChainId,
+} from "wagmi";
+import { celo } from "viem/chains";
+import {
+  LEADERBOARD_ADDRESS,
+  LEADERBOARD_ABI,
+  SUBMIT_PRICE_WEI,
+  CONTRACT_DEPLOYED,
+} from "@/lib/celo-config";
+import { detectPlatform } from "@/lib/platform-detect";
 
-const F = "'Press Start 2P', monospace";
+export type SubmitStatus =
+  | "idle"
+  | "not-deployed"       // contrato ainda não deployado
+  | "connecting"
+  | "switching"
+  | "confirming"
+  | "pending"
+  | "success"
+  | "not-personal-best"
+  | "error";
 
-type Props = {
+export type SubmitState = {
+  status: SubmitStatus;
+  txHash?: `0x${string}`;
+  error?: string;
+  enteredTop10?: boolean;
+  submit: () => Promise<void>;
+  reset: () => void;
+};
+
+type Options = {
   fid: number;
   score: number;
   level: number;
 };
 
-const LABELS: Record<SubmitStatus, string> = {
-  idle:               "⛓ SUBMIT SCORE — 0.01 CELO",
-  "not-deployed":     "⛓ SUBMIT SCORE — 0.01 CELO",
-  connecting:         "⏳ Conectando carteira...",
-  switching:          "⏳ Trocando para Celo...",
-  confirming:         "⏳ Confirme na carteira...",
-  pending:            "⏳ Aguardando confirmação...",
-  success:            "✅ SCORE REGISTRADO!",
-  "not-personal-best":"🔒 Já tens score melhor on-chain",
-  error:              "❌ Tentar novamente",
-};
+export function useSubmitScore({ fid, score, level }: Options): SubmitState {
+  const [status,       setStatus]       = useState<SubmitStatus>("idle");
+  const [error,        setError]        = useState<string | undefined>();
+  const [enteredTop10, setEnteredTop10] = useState(false);
 
-const BG: Record<SubmitStatus, string> = {
-  idle:               "linear-gradient(135deg,#22c55e,#15803d)",
-  "not-deployed":     "rgba(255,255,255,0.06)",
-  connecting:         "rgba(255,255,255,0.06)",
-  switching:          "rgba(255,255,255,0.06)",
-  confirming:         "rgba(255,255,255,0.06)",
-  pending:            "rgba(255,255,255,0.06)",
-  success:            "linear-gradient(135deg,#FFD700,#b8860b)",
-  "not-personal-best":"rgba(255,255,255,0.06)",
-  error:              "linear-gradient(135deg,#ef4444,#b91c1c)",
-};
+  const chainId              = useChainId();
+  const { isConnected }      = useAccount();
+  const { connect, connectors } = useConnect();
+  const { switchChainAsync } = useSwitchChain();
 
-const DISABLED: SubmitStatus[] = [
-  "connecting","switching","confirming","pending","success","not-personal-best","not-deployed",
-];
+  const {
+    writeContract,
+    data: txHash,
+    isPending: isSendPending,
+    error: writeError,
+    reset: resetWrite,
+  } = useWriteContract();
 
-export function SubmitScoreWidget({ fid, score, level }: Props) {
-  const { status, txHash, error, submit } = useSubmitScore({ fid, score, level });
+  const {
+    isLoading: isPending,
+    isSuccess,
+    data: receipt,
+  } = useWaitForTransactionReceipt({ hash: txHash });
 
-  const isDisabled = DISABLED.includes(status);
+  // ── Reage ao estado da tx ───────────────────────────────────────────────────
+  useEffect(() => { if (isSendPending) setStatus("confirming"); }, [isSendPending]);
+  useEffect(() => { if (isPending)     setStatus("pending");    }, [isPending]);
 
-  // Contrato não deployado ainda — mostra aviso sutil
-  if (status === "not-deployed" || !CONTRACT_DEPLOYED) {
+  useEffect(() => {
+    if (!isSuccess || !receipt) return;
+    // Checa se entrou no top10 pelo evento ScoreSubmitted
+    try {
+      const top10 = receipt.logs.some(log => {
+        // enteredTop10 é o 3º tópico não-indexado; na ABI é o 3o data word
+        // Verificação simples: se o evento existe no log do contrato
+        return log.address.toLowerCase() === LEADERBOARD_ADDRESS.toLowerCase();
+      });
+      setEnteredTop10(top10);
+    } catch {
+      setEnteredTop10(false);
+    }
+    setStatus("success");
+  }, [isSuccess, receipt]);
+
+  useEffect(() => {
+    if (!writeError) return;
+    const msg = writeError.message ?? "";
+    if (msg.toLowerCase().includes("personal best")) {
+      setStatus("not-personal-best");
+    } else if (msg.toLowerCase().includes("rejected") || msg.toLowerCase().includes("denied")) {
+      setError("Transação rejeitada na carteira.");
+      setStatus("error");
+    } else {
+      setError(msg.slice(0, 150) || "Erro inesperado.");
+      setStatus("error");
+    }
+  }, [writeError]);
+
+  // Quando conectar, continua o fluxo
+  useEffect(() => {
+    if (isConnected && status === "connecting") {
+      void doChainAndWrite();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected]);
+
+  // ── Escolhe o conector certo para a plataforma ──────────────────────────────
+  function pickConnector() {
+    const platform = detectPlatform();
+
+    if (platform === "farcaster") {
+      return (
+        connectors.find(c =>
+          c.id === "farcasterMiniApp" ||
+          c.name?.toLowerCase().includes("farcaster")
+        ) ?? connectors[0]
+      );
+    }
+
+    if (platform === "minipay") {
+      return (
+        connectors.find(c => c.id === "injected") ??
+        connectors.find(c => c.id === "metaMask") ??
+        connectors[0]
+      );
+    }
+
+    // Browser: MetaMask se disponível, senão primeiro disponível
     return (
-      <div style={{
-        width: "100%", padding: "10px", borderRadius: "10px",
-        border: "1px dashed #2d5a2d", background: "rgba(0,0,0,.3)",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
-      }}>
-        <span style={{ fontFamily: F, fontSize: "7px", color: "#4a7a4a" }}>
-          ⛓ Ranking on-chain em breve
-        </span>
-        <span style={{ fontFamily: F, fontSize: "5px", color: "#2d5a2d", textAlign: "center", lineHeight: 1.8 }}>
-          Contrato não deployado ainda
-        </span>
-      </div>
+      connectors.find(c => c.id === "injected") ??
+      connectors.find(c => c.id === "metaMask") ??
+      connectors.find(c => c.id !== "farcasterMiniApp") ??
+      connectors[0]
     );
   }
 
-  return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "6px" }}>
-      <button
-        onClick={() => void submit()}
-        disabled={isDisabled}
-        style={{
-          width: "100%", padding: "12px", borderRadius: "12px",
-          border: status === "success" ? "2px solid #FFD700" : "1px solid rgba(255,255,255,0.1)",
-          background: BG[status], color: "#fff", fontSize: "9px",
-          fontFamily: F, cursor: isDisabled ? "not-allowed" : "pointer",
-          minHeight: "44px",
-          opacity: isDisabled && !["success","not-personal-best"].includes(status) ? 0.7 : 1,
-          transition: "all 0.2s",
-        }}
-      >
-        {LABELS[status]}
-      </button>
+  // ── Troca para Celo e escreve no contrato ───────────────────────────────────
+  async function doChainAndWrite() {
+    if (chainId !== celo.id) {
+      setStatus("switching");
+      try {
+        await switchChainAsync({ chainId: celo.id });
+      } catch {
+        setError("Falha ao trocar para a rede Celo. Troque manualmente na sua carteira.");
+        setStatus("error");
+        return;
+      }
+    }
 
-      {status === "idle" && (
-        <p style={{ fontFamily: F, fontSize: "6px", color: "#a3c4a3", textAlign: "center", margin: 0, lineHeight: 1.8 }}>
-          Ranking on-chain unificado · Celo
-        </p>
-      )}
+    setStatus("confirming");
+    try {
+      writeContract({
+        address: LEADERBOARD_ADDRESS,
+        abi: LEADERBOARD_ABI,
+        functionName: "submitScore",
+        args: [BigInt(fid), BigInt(score), BigInt(level)],
+        value: SUBMIT_PRICE_WEI,
+        chainId: celo.id,
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message.slice(0, 150) : "Erro ao iniciar transação.");
+      setStatus("error");
+    }
+  }
 
-      {status === "success" && txHash && (
-        <a
-          href={`https://celoscan.io/tx/${txHash}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ fontFamily: F, fontSize: "6px", color: "#FFD700", textAlign: "center", textDecoration: "underline" }}
-        >
-          Ver no Celoscan ↗
-        </a>
-      )}
+  // ── Ponto de entrada público ────────────────────────────────────────────────
+  async function submit() {
+    // Contrato não deployado ainda
+    if (!CONTRACT_DEPLOYED) {
+      setStatus("not-deployed");
+      return;
+    }
 
-      {status === "error" && error && (
-        <p style={{ fontFamily: F, fontSize: "6px", color: "#ef4444", textAlign: "center", margin: 0, lineHeight: 1.8 }}>
-          {error}
-        </p>
-      )}
+    if (score <= 0) {
+      setError("Score inválido.");
+      setStatus("error");
+      return;
+    }
 
-      {status === "not-personal-best" && (
-        <p style={{ fontFamily: F, fontSize: "6px", color: "#a3c4a3", textAlign: "center", margin: 0, lineHeight: 1.8 }}>
-          Jogue melhor para superar seu recorde!
-        </p>
-      )}
-    </div>
-  );
+    setError(undefined);
+    setEnteredTop10(false);
+    resetWrite();
+
+    if (!isConnected) {
+      setStatus("connecting");
+      const connector = pickConnector();
+      if (!connector) {
+        setError("Nenhuma carteira encontrada. Instale MetaMask ou abra via Farcaster/MiniPay.");
+        setStatus("error");
+        return;
+      }
+      try {
+        connect({ connector });
+      } catch {
+        setError("Falha ao conectar carteira.");
+        setStatus("error");
+      }
+      return; // useEffect [isConnected] continua o fluxo
+    }
+
+    await doChainAndWrite();
+  }
+
+  function reset() {
+    setStatus("idle");
+    setError(undefined);
+    setEnteredTop10(false);
+    resetWrite();
+  }
+
+  return { status, txHash, error, enteredTop10, submit, reset };
 }
