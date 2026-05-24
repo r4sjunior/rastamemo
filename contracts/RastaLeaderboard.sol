@@ -92,7 +92,8 @@ contract RastaLeaderboard {
 
         // Devolve o excesso de CELO enviado
         if (msg.value > SUBMIT_PRICE) {
-            payable(msg.sender).transfer(msg.value - SUBMIT_PRICE);
+            (bool refundOk, ) = payable(msg.sender).call{value: msg.value - SUBMIT_PRICE}("");
+            require(refundOk, "RastaLeaderboard: refund failed");
         }
 
         // Verifica se esse score bate o recorde pessoal
@@ -182,7 +183,8 @@ contract RastaLeaderboard {
     function withdraw() external onlyOwner {
         uint256 bal = address(this).balance;
         require(bal > 0, "RastaLeaderboard: nothing to withdraw");
-        payable(owner).transfer(bal);
+        (bool ok, ) = payable(owner).call{value: bal}("");
+        require(ok, "RastaLeaderboard: withdraw failed");
         emit Withdrawn(owner, bal);
     }
 
