@@ -497,6 +497,23 @@ export function MiniApp() {
                 >
                   SHARE SCORE 🌿
                 </ShareButton>
+                <button
+                  onClick={resetGame}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "10px",
+                    border: "1px solid #2d5a2d",
+                    background: "rgba(255,255,255,0.04)",
+                    color: "#a3c4a3",
+                    fontSize: "9px",
+                    cursor: "pointer",
+                    fontFamily: "'Press Start 2P', monospace",
+                    minHeight: "44px",
+                  }}
+                >
+                  🚪 SAIR
+                </button>
               </>
             )}
           </div>
