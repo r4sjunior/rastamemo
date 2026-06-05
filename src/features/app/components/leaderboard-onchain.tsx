@@ -63,7 +63,7 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
 
   return (
     <div
-      className="absolute inset-0 z-50 flex items-center justify-center px-4"
+      className="absolute inset-0 z-[60] flex items-center justify-center px-4"
       style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(6px)" }}
     >
       <div
@@ -93,12 +93,12 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
           <button
             onClick={onClose}
             style={{
-              background: "rgba(255,255,255,0.08)", border: "1px solid #2d5a2d",
-              borderRadius: "6px", color: "#a3c4a3", cursor: "pointer",
-              fontFamily: F, fontSize: "8px", padding: "4px 8px", minHeight: "32px",
+              background: "rgba(239,68,68,0.15)", border: "1px solid #ef4444",
+              borderRadius: "6px", color: "#ef4444", cursor: "pointer",
+              fontFamily: F, fontSize: "8px", padding: "6px 12px", minHeight: "36px",
             }}
           >
-            CLOSE
+            ✕ SAIR
           </button>
         </div>
 
