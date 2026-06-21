@@ -25,6 +25,7 @@ type Card = {
   rare?: boolean;
   flipped: boolean;
   matched: boolean;
+  wrong?: boolean;
 };
 
 // Fisher-Yates — truly unbiased shuffle
@@ -195,11 +196,20 @@ export function MiniApp() {
         return next;
       });
 
+      // Marca as duas cartas como "wrong" para disparar a animação de erro
+      setCards(prev =>
+        prev.map(c =>
+          c.uid === first.uid || c.uid === second.uid
+            ? { ...c, wrong: true }
+            : c
+        )
+      );
+
       setTimeout(() => {
         setCards(prev =>
           prev.map(c =>
             c.uid === first.uid || c.uid === second.uid
-              ? { ...c, flipped: false }
+              ? { ...c, flipped: false, wrong: false }
               : c
           )
         );
@@ -252,7 +262,30 @@ export function MiniApp() {
         fontFamily: "'Press Start 2P', monospace",
       }}
     >
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        @keyframes rasta-shake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-5px); }
+          40% { transform: translateX(5px); }
+          60% { transform: translateX(-4px); }
+          80% { transform: translateX(4px); }
+        }
+        @keyframes rasta-match-pop {
+          0% { transform: scale(1); }
+          40% { transform: scale(1.12); }
+          70% { transform: scale(0.96); }
+          100% { transform: scale(1); }
+        }
+        @keyframes rasta-glow {
+          0%, 100% { box-shadow: 0 0 8px rgba(255,215,0,0.5); }
+          50% { box-shadow: 0 0 18px rgba(255,215,0,0.95); }
+        }
+        @keyframes rasta-flip-in {
+          0% { transform: scale(0.9); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
 
       <audio
         ref={audioRef}
@@ -374,6 +407,11 @@ export function MiniApp() {
                   aspectRatio: "1/1",
                   cursor: lock || card.flipped || card.matched ? "default" : "pointer",
                   perspective: "600px",
+                  animation: card.wrong
+                    ? "rasta-shake 0.4s ease"
+                    : card.matched
+                    ? "rasta-match-pop 0.45s ease"
+                    : undefined,
                 }}
               >
                 <div
@@ -410,8 +448,15 @@ export function MiniApp() {
                       transform: "rotateY(180deg)",
                       borderRadius: "6px",
                       overflow: "hidden",
-                      border: `2px solid ${card.matched ? "#FFD700" : "#22c55e"}`,
-                      boxShadow: card.matched ? "0 0 10px rgba(255,215,0,0.6)" : undefined,
+                      border: `2px solid ${
+                        card.wrong ? "#ef4444" : card.matched ? "#FFD700" : "#22c55e"
+                      }`,
+                      boxShadow: card.wrong
+                        ? "0 0 10px rgba(239,68,68,0.7)"
+                        : card.matched
+                        ? "0 0 10px rgba(255,215,0,0.6)"
+                        : undefined,
+                      animation: card.matched ? "rasta-glow 1.2s ease-in-out infinite" : undefined,
                     }}
                   >
                     <img src={card.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
