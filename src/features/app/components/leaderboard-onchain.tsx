@@ -66,6 +66,20 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
       className="absolute inset-0 z-[60] flex items-center justify-center px-4"
       style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(6px)" }}
     >
+      <style>{`
+        @keyframes lb-row-in {
+          0% { opacity: 0; transform: translateY(12px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes lb-gold-glow {
+          0%, 100% { box-shadow: 0 0 8px rgba(255,215,0,0.5); }
+          50% { box-shadow: 0 0 20px rgba(255,215,0,1); }
+        }
+        @keyframes lb-podium-in {
+          0% { opacity: 0; transform: translateY(18px) scale(0.92); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
       <div
         style={{
           background: "linear-gradient(135deg, #0d1a0d 0%, #1a3a1a 100%)",
@@ -154,9 +168,58 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
             </div>
           )}
 
-          {list.map((entry, i) => {
+          {/* ─── PÓDIO Top 3 ─── */}
+          {CONTRACT_DEPLOYED && !isLoading && !error && list.length > 0 && (() => {
+            const podium = list.slice(0, 3);
+            // ordem visual: 2º, 1º, 3º (1º no centro mais alto)
+            const order = [podium[1], podium[0], podium[2]];
+            const ranks = [2, 1, 3];
+            const medals = ["🥈", "🥇", "🥉"];
+            const heights = ["78px", "96px", "66px"];
+            const borders = ["#c0c0c0", "#FFD700", "#cd7f32"];
+            const bgs = ["rgba(192,192,192,0.08)", "rgba(255,215,0,0.12)", "rgba(205,127,50,0.08)"];
+            return (
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: "6px", marginBottom: "4px" }}>
+                {order.map((entry, idx) => {
+                  if (!entry) return <div key={idx} style={{ flex: 1 }} />;
+                  const isMe = address?.toLowerCase() === entry.player.toLowerCase();
+                  const isFirst = ranks[idx] === 1;
+                  return (
+                    <div
+                      key={`${entry.player}-podium-${idx}`}
+                      style={{
+                        flex: 1,
+                        display: "flex", flexDirection: "column", alignItems: "center",
+                        justifyContent: "flex-end",
+                        background: bgs[idx],
+                        border: `2px solid ${borders[idx]}`,
+                        borderRadius: "10px",
+                        padding: "8px 4px",
+                        minHeight: heights[idx],
+                        animation: `lb-podium-in 0.5s ease ${idx * 0.12}s both${isFirst ? ", lb-gold-glow 1.6s ease-in-out infinite 0.6s" : ""}`,
+                      }}
+                    >
+                      <div style={{ fontSize: isFirst ? "20px" : "16px" }}>{medals[idx]}</div>
+                      <div style={{ fontFamily: F, fontSize: "5px", color: isMe ? "#FFD700" : "#fff", marginTop: "4px", textAlign: "center", lineHeight: 1.4 }}>
+                        {entry.fid > 0n ? `FID ${entry.fid}` : shortAddr(entry.player)}
+                      </div>
+                      <div style={{ fontFamily: F, fontSize: isFirst ? "13px" : "10px", color: borders[idx], marginTop: "3px" }}>
+                        {entry.score.toString()}
+                      </div>
+                      <div style={{ fontFamily: F, fontSize: "4px", color: "#4a7a4a", marginTop: "2px" }}>
+                        LVL {entry.level.toString()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* ─── Resto da lista (4º em diante) com cascata ─── */}
+          {list.slice(3).map((entry, idx) => {
+            const i = idx + 3;
             const isMe = address?.toLowerCase() === entry.player.toLowerCase();
-            const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
             return (
               <div
                 key={`${entry.player}-${i}`}
@@ -165,10 +228,11 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
                   background: isMe ? "rgba(255,215,0,0.12)" : "rgba(0,0,0,0.3)",
                   border: `1px solid ${isMe ? "#FFD700" : "#2d5a2d"}`,
                   borderRadius: "8px", padding: "6px 10px",
+                  animation: `lb-row-in 0.35s ease ${Math.min(idx * 0.05, 0.6)}s both`,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontFamily: F, fontSize: "8px", color: "#FFD700", minWidth: "20px" }}>{medal}</span>
+                  <span style={{ fontFamily: F, fontSize: "8px", color: "#FFD700", minWidth: "20px" }}>{i + 1}.</span>
                   <div>
                     <div style={{ fontFamily: F, fontSize: "7px", color: isMe ? "#FFD700" : "#fff" }}>
                       {entry.fid > 0n ? `FID ${entry.fid}` : shortAddr(entry.player)}
