@@ -90,7 +90,10 @@ export function MiniApp() {
   const [muted, setMuted] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [trackIndex, setTrackIndex] = useState(0);
+  // Começa numa faixa aleatória da playlist
+  const [trackIndex, setTrackIndex] = useState(() =>
+    Math.floor(Math.random() * PLAYLIST.length)
+  );
   const scoreSavedRef = useRef(false);
 
   const { data: user } = useFarcasterUser();
@@ -108,9 +111,15 @@ export function MiniApp() {
     audioRef.current?.play().catch(() => {});
   }
 
-  // Quando uma música termina, toca a próxima (volta à primeira no fim da lista)
+  // Quando uma música termina, sorteia a próxima (evita repetir a mesma seguida)
   function handleTrackEnded() {
-    setTrackIndex((prev) => (prev + 1) % PLAYLIST.length);
+    setTrackIndex((prev) => {
+      if (PLAYLIST.length <= 1) return prev;
+      let next = Math.floor(Math.random() * PLAYLIST.length);
+      // se sortear a mesma, pega a seguinte para não repetir
+      if (next === prev) next = (next + 1) % PLAYLIST.length;
+      return next;
+    });
   }
 
   // Ao trocar de faixa, carrega e toca a nova (se não estiver no mute)
