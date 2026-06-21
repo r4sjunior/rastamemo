@@ -84,6 +84,8 @@ export function MiniApp() {
   const [ready, setReady] = useState(false);
   const [lock, setLock] = useState(false);
   const [score, setScore] = useState(0);
+  const [scorePulse, setScorePulse] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [lives, setLives] = useState(STARTING_LIVES);
   const [errors, setErrors] = useState(0);
   const [level, setLevel] = useState(1);
@@ -173,6 +175,8 @@ export function MiniApp() {
     if (first.src === second.src) {
       // MATCH
       setScore(prev => prev + first.points);
+      setScorePulse(true);
+      setTimeout(() => setScorePulse(false), 450);
 
       setCards(prev => {
         const next = prev.map(c =>
@@ -181,6 +185,8 @@ export function MiniApp() {
             : c
         );
         if (next.every(c => c.matched)) {
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 1800);
           setTimeout(() => setPhase("level-complete"), 200);
         }
         return next;
@@ -285,6 +291,27 @@ export function MiniApp() {
           0% { transform: scale(0.9); }
           100% { transform: scale(1); }
         }
+        @keyframes rasta-score-pop {
+          0% { transform: scale(1); color: #FFD700; }
+          40% { transform: scale(1.5); color: #22c55e; }
+          100% { transform: scale(1); color: #FFD700; }
+        }
+        @keyframes rasta-lives-blink {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(1.15); }
+        }
+        @keyframes rasta-confetti-fall {
+          0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(420px) rotate(540deg); opacity: 0; }
+        }
+        .rasta-card-tap:active > div {
+          transform: scale(0.94) !important;
+        }
+        @media (hover: hover) {
+          .rasta-card-tap:hover:not(.is-done) > div {
+            transform: scale(1.04);
+          }
+        }
       `}</style>
 
       <audio
@@ -293,6 +320,37 @@ export function MiniApp() {
         onEnded={handleTrackEnded}
         preload="auto"
       />
+
+      {/* CONFETE ao completar nível (cores rasta) */}
+      {showConfetti && (
+        <div
+          className="absolute inset-0 pointer-events-none z-30"
+          style={{ overflow: "hidden" }}
+        >
+          {Array.from({ length: 40 }).map((_, i) => {
+            const colors = ["#FFD700", "#22c55e", "#ef4444", "#fbbf24"];
+            const left = Math.random() * 100;
+            const delay = Math.random() * 0.4;
+            const dur = 1.1 + Math.random() * 0.7;
+            const size = 6 + Math.random() * 6;
+            return (
+              <span
+                key={i}
+                style={{
+                  position: "absolute",
+                  top: "-20px",
+                  left: `${left}%`,
+                  width: `${size}px`,
+                  height: `${size}px`,
+                  background: colors[i % colors.length],
+                  borderRadius: i % 2 === 0 ? "50%" : "2px",
+                  animation: `rasta-confetti-fall ${dur}s ease-in ${delay}s forwards`,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
 
       <div className="absolute inset-0 pointer-events-none" style={{ background: "rgba(0,0,0,0.5)" }} />
 
@@ -355,26 +413,44 @@ export function MiniApp() {
         style={{ background: "rgba(10,30,10,0.85)", borderBottom: "1px solid #2d5a2d" }}
       >
         {[
-          { label: "LVL", value: level, color: "#FFD700" },
-          { label: "SCORE", value: score, color: "#FFD700" },
-          { label: "LIVES", value: `❤️ ${lives}`, color: livesColor },
-        ].map(({ label, value, color }) => (
-          <div
-            key={label}
-            className="flex flex-col items-center"
-            style={{
-              background: "rgba(0,0,0,0.4)",
-              border: "1px solid #2d5a2d",
-              borderRadius: "8px",
-              padding: "4px 10px",
-              minWidth: "70px",
-              textAlign: "center",
-            }}
-          >
-            <span style={{ fontSize: "7px", color: "#22c55e", letterSpacing: "0.05em" }}>{label}</span>
-            <span style={{ fontSize: "11px", color, marginTop: "2px" }}>{value}</span>
-          </div>
-        ))}
+          { label: "LVL", value: level, color: "#FFD700", key: "lvl" },
+          { label: "SCORE", value: score, color: "#FFD700", key: "score" },
+          { label: "LIVES", value: `❤️ ${lives}`, color: livesColor, key: "lives" },
+        ].map(({ label, value, color, key }) => {
+          const isScore = key === "score";
+          const isLivesCritical = key === "lives" && lives <= 3;
+          return (
+            <div
+              key={label}
+              className="flex flex-col items-center"
+              style={{
+                background: "rgba(0,0,0,0.4)",
+                border: "1px solid #2d5a2d",
+                borderRadius: "8px",
+                padding: "4px 10px",
+                minWidth: "70px",
+                textAlign: "center",
+              }}
+            >
+              <span style={{ fontSize: "7px", color: "#22c55e", letterSpacing: "0.05em" }}>{label}</span>
+              <span
+                style={{
+                  fontSize: "11px",
+                  color,
+                  marginTop: "2px",
+                  display: "inline-block",
+                  animation: isScore && scorePulse
+                    ? "rasta-score-pop 0.45s ease"
+                    : isLivesCritical
+                    ? "rasta-lives-blink 0.8s ease-in-out infinite"
+                    : undefined,
+                }}
+              >
+                {value}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       {/* LIVES BAR */}
@@ -401,6 +477,7 @@ export function MiniApp() {
               <div
                 key={card.uid}
                 onClick={() => flipCard(card)}
+                className={`rasta-card-tap${card.flipped || card.matched ? " is-done" : ""}`}
                 style={{
                   position: "relative",
                   width: "100%",
