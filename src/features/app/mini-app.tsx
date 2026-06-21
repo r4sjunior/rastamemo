@@ -12,8 +12,11 @@ const LOGO_URL =
 const BG_URL =
   "https://remix.gg/blob/409848fd-a78f-43b9-bde4-3fd5d7371865/fundogame-edited-PFb9Qku9gN-zyV5gCodUbsyRmG85uKvJxpDYsMNiQ.webp?HQTc";
 
-const MUSIC_URL =
-  "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/409848fd-a78f-43b9-bde4-3fd5d7371865/Im%20Just%20a%20Chill%20Guy-vV4Ky4X20oUr1kPVb5eRYc9u9Ys2QM.mp3?FKDH";
+const PLAYLIST = [
+  "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/409848fd-a78f-43b9-bde4-3fd5d7371865/Im%20Just%20a%20Chill%20Guy-vV4Ky4X20oUr1kPVb5eRYc9u9Ys2QM.mp3?FKDH",
+  "https://9gfytnfmfqhgc9m3.public.blob.vercel-storage.com/Arcanjo%20Ras%20feat.%20Cryptorasta%20-%20Vai%20Sem%20Medo%20%28Lyric%20Video%29.mp3",
+  "https://9gfytnfmfqhgc9m3.public.blob.vercel-storage.com/CryptoRastas%20Original%20Music%20Theme%20ft.%20DADA%20YUTE.mp3",
+];
 
 type Card = {
   uid: string;
@@ -87,6 +90,7 @@ export function MiniApp() {
   const [muted, setMuted] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [trackIndex, setTrackIndex] = useState(0);
   const scoreSavedRef = useRef(false);
 
   const { data: user } = useFarcasterUser();
@@ -103,6 +107,20 @@ export function MiniApp() {
   function startMusic() {
     audioRef.current?.play().catch(() => {});
   }
+
+  // Quando uma música termina, toca a próxima (volta à primeira no fim da lista)
+  function handleTrackEnded() {
+    setTrackIndex((prev) => (prev + 1) % PLAYLIST.length);
+  }
+
+  // Ao trocar de faixa, carrega e toca a nova (se não estiver no mute)
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    a.load();
+    if (!muted) a.play().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackIndex]);
 
   function toggleMute() {
     const a = audioRef.current;
@@ -227,7 +245,12 @@ export function MiniApp() {
     >
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');`}</style>
 
-      <audio ref={audioRef} src={MUSIC_URL} loop preload="auto" />
+      <audio
+        ref={audioRef}
+        src={PLAYLIST[trackIndex]}
+        onEnded={handleTrackEnded}
+        preload="auto"
+      />
 
       <div className="absolute inset-0 pointer-events-none" style={{ background: "rgba(0,0,0,0.5)" }} />
 
