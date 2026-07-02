@@ -2,264 +2,235 @@
 pragma solidity ^0.8.20;
 
 /**
- * ██████╗  █████╗ ███████╗████████╗ █████╗     ███╗   ███╗███████╗███╗   ███╗ ██████╗
- * ██╔══██╗██╔══██╗██╔════╝╚══██╔══╝██╔══██╗    ████╗ ████║██╔════╝████╗ ████║██╔═══██╗
- * ██████╔╝███████║███████╗   ██║   ███████║    ██╔████╔██║█████╗  ██╔████╔██║██║   ██║
- * ██╔══██╗██╔══██║╚════██║   ██║   ██╔══██║    ██║╚██╔╝██║██╔══╝  ██║╚██╔╝██║██║   ██║
- * ██║  ██║██║  ██║███████║   ██║   ██║  ██║    ██║ ╚═╝ ██║███████╗██║ ╚═╝ ██║╚██████╔╝
- * ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝    ╚═╝     ╚═╝╚══════╝╚═╝     ╚═╝ ╚═════╝
+ * @title  RastaLeaderboard (multi-ativo)
+ * @notice Ranking on-chain do Rasta Memo — Celo Mainnet (42220).
  *
- * @title  RastaLeaderboard
- * @notice Ranking on-chain do jogo Rasta Memo na rede Celo.
+ * Funcionalidades:
+ *  - Pagamentos em CELO (nativo), USDC e USDT (ERC-20 na Celo)
+ *  - Valores fixos (sem conversão):
+ *      • Continue (Game Over): 0.05
+ *      • Mint do Score:        0.01
+ *  - Mint do score MÚLTIPLAS vezes (sem limite)
+ *  - Leaderboard ILIMITADO (todos os scores registrados)
  *
- * Regras:
- *  - Jogador paga SUBMIT_PRICE (0.01 CELO) para registrar um score.
- *  - Cada carteira guarda apenas seu melhor score (só atualiza se for maior).
- *  - O contrato mantém o top-10 global ordenado na chain.
- *  - Qualquer um pode ler o leaderboard sem pagar gas.
+ * Endereços ERC-20 (Celo Mainnet):
+ *   USDC = 0xcebA9300f2b948710d2653dD7B07f33A8B32118C (6 decimais)
+ *   USDT = 0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e (6 decimais)
  *
- * Deploy:
- *  Remix IDE → Celo Mainnet (chainId 42220) | RPC: https://forno.celo.org
- *  ou: npx hardhat run scripts/deploy.js --network celo
+ * ─── Segurança ────────────────────────────────────────────────────────────────
+ *  - ReentrancyGuard (nonReentrant) em toda função que move ativos
+ *  - Check-Effects-Interactions
+ *  - SafeERC20 interno (trata USDT que não retorna bool)
+ *  - Validações de address(0)
  */
-contract RastaLeaderboard {
 
-    // ─── Constantes ────────────────────────────────────────────────────────────
-    uint256 public constant SUBMIT_PRICE = 0.01 ether;  // 0.01 CELO
-    uint8   public constant TOP_SIZE     = 10;           // tamanho do leaderboard
+interface IERC20 {
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}
 
-    // ─── Structs ────────────────────────────────────────────────────────────────
-    struct Entry {
-        address player;   // carteira do jogador
-        uint256 fid;      // Farcaster ID (0 se não tiver)
-        uint256 score;    // pontuação
-        uint256 level;    // nível alcançado
-        uint256 submittedAt; // timestamp
+library SafeERC20 {
+    function safeTransferFrom(IERC20 token, address from, address to, uint256 value) internal {
+        _call(address(token), abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
     }
+    function safeTransfer(IERC20 token, address to, uint256 value) internal {
+        _call(address(token), abi.encodeWithSelector(token.transfer.selector, to, value));
+    }
+    function _call(address token, bytes memory data) private {
+        require(token.code.length > 0, "SafeERC20: not a contract");
+        (bool ok, bytes memory ret) = token.call(data);
+        require(ok, "SafeERC20: call failed");
+        if (ret.length > 0) require(abi.decode(ret, (bool)), "SafeERC20: op failed");
+    }
+}
 
-    // ─── Estado ─────────────────────────────────────────────────────────────────
+abstract contract ReentrancyGuard {
+    uint256 private constant _NOT = 1;
+    uint256 private constant _ENT = 2;
+    uint256 private _s = _NOT;
+    modifier nonReentrant() {
+        require(_s != _ENT, "reentrant");
+        _s = _ENT; _; _s = _NOT;
+    }
+}
+
+contract RastaLeaderboard is ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    // ─── Preços (valores fixos) ───────────────────────────────────────────────
+    // CELO (18 dec)
+    uint256 public constant MINT_CELO     = 0.01 ether; // 0.01 CELO
+    uint256 public constant CONTINUE_CELO = 0.05 ether; // 0.05 CELO
+    // Stablecoins (6 dec): 0.01 = 10_000 ; 0.05 = 50_000
+    uint256 public constant MINT_STABLE_6     = 10_000;
+    uint256 public constant CONTINUE_STABLE_6 = 50_000;
+
     address public owner;
 
-    // Melhor score de cada carteira
-    mapping(address => Entry) private _bestByWallet;
-    mapping(address => bool)  private _hasSubmitted;
+    struct ScoreEntry {
+        address player;
+        uint256 fid;
+        uint256 score;
+        uint256 level;
+        uint256 timestamp;
+    }
 
-    // Top-10 mantido ordenado (decrescente por score)
-    Entry[10] private _top10;
-    uint8 public topCount; // quantas posições estão preenchidas (0–10)
+    ScoreEntry[] public allScores;                 // leaderboard ILIMITADO
+    mapping(address => uint256) public bestScoreOf;
+    mapping(address => uint256) public totalMintsOf;
+    mapping(address => uint8)   public acceptedStable; // token => decimais (0 = nao aceito)
 
-    // ─── Eventos ────────────────────────────────────────────────────────────────
-    event ScoreSubmitted(
-        address indexed player,
-        uint256 indexed fid,
-        uint256 score,
-        uint256 level,
-        bool    enteredTop10
-    );
+    event ScoreMinted(address indexed player, uint256 indexed fid, uint256 score, uint256 level, uint256 index);
+    event Continued(address indexed player, address asset);
+    event Withdrawn(address indexed to, uint256 amount, address token);
 
-    event LeaderboardUpdated(uint8 position, address player, uint256 score);
-    event Withdrawn(address to, uint256 amount);
+    modifier onlyOwner() { require(msg.sender == owner, "not owner"); _; }
 
-    // ─── Constructor ────────────────────────────────────────────────────────────
     constructor() {
         owner = msg.sender;
+        acceptedStable[0xcebA9300f2b948710d2653dD7B07f33A8B32118C] = 6; // USDC
+        acceptedStable[0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e] = 6; // USDT
     }
 
-    // ─── Modificadores ──────────────────────────────────────────────────────────
-    modifier onlyOwner() {
-        require(msg.sender == owner, "RastaLeaderboard: not owner");
-        _;
-    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  MINT DO SCORE (0.01) — múltiplas vezes
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    // ───────────────────────────────────────────────────────────────────────────
-    //  FUNÇÕES PÚBLICAS
-    // ───────────────────────────────────────────────────────────────────────────
-
-    /**
-     * @notice Submete um score. Só aceita se for melhor que o anterior da carteira.
-     * @param fid   Farcaster ID do jogador (0 se não tiver)
-     * @param score Pontuação final
-     * @param level Nível alcançado
-     */
-    function submitScore(
-        uint256 fid,
-        uint256 score,
-        uint256 level
-    ) external payable {
-        require(msg.value >= SUBMIT_PRICE, "RastaLeaderboard: pay 0.01 CELO");
-        require(score > 0,                 "RastaLeaderboard: score must be > 0");
-        require(level > 0,                 "RastaLeaderboard: level must be > 0");
-
-        // Devolve o excesso de CELO enviado
-        if (msg.value > SUBMIT_PRICE) {
-            (bool refundOk, ) = payable(msg.sender).call{value: msg.value - SUBMIT_PRICE}("");
-            require(refundOk, "RastaLeaderboard: refund failed");
-        }
-
-        // Verifica se esse score bate o recorde pessoal
-        bool isPersonalBest = !_hasSubmitted[msg.sender] ||
-                               score > _bestByWallet[msg.sender].score;
-
-        require(isPersonalBest, "RastaLeaderboard: not a personal best");
-
-        // Salva o melhor score pessoal
-        _bestByWallet[msg.sender] = Entry({
-            player:      msg.sender,
-            fid:         fid,
-            score:       score,
-            level:       level,
-            submittedAt: block.timestamp
-        });
-        _hasSubmitted[msg.sender] = true;
-
-        // Tenta entrar no top-10
-        bool enteredTop = _tryInsertTop10(msg.sender, fid, score, level);
-
-        emit ScoreSubmitted(msg.sender, fid, score, level, enteredTop);
-    }
-
-    // ─── Leitura do leaderboard ──────────────────────────────────────────────────
-
-    /**
-     * @notice Retorna o top-10 atual (ordenado, maior score primeiro).
-     */
-    function getLeaderboard() external view returns (Entry[10] memory) {
-        return _top10;
-    }
-
-    /**
-     * @notice Retorna somente os slots preenchidos do top-10.
-     */
-    function getLeaderboardActive() external view returns (Entry[] memory) {
-        Entry[] memory active = new Entry[](topCount);
-        for (uint8 i = 0; i < topCount; i++) {
-            active[i] = _top10[i];
-        }
-        return active;
-    }
-
-    /**
-     * @notice Retorna o melhor score de uma carteira específica.
-     * @param wallet endereço da carteira
-     */
-    function getBestByWallet(address wallet)
-        external
-        view
-        returns (Entry memory entry, bool exists)
+    function mintScoreCELO(uint256 fid, uint256 score, uint256 level)
+        external payable nonReentrant
     {
-        return (_bestByWallet[wallet], _hasSubmitted[wallet]);
-    }
-
-    /**
-     * @notice Retorna a posição de uma carteira no top-10 (1-indexed).
-     *         Retorna 0 se não estiver no top-10.
-     */
-    function getRankOf(address wallet) external view returns (uint8) {
-        for (uint8 i = 0; i < topCount; i++) {
-            if (_top10[i].player == wallet) return i + 1;
+        require(msg.value >= MINT_CELO, "pay 0.01 CELO");
+        require(score > 0, "score > 0");
+        _register(msg.sender, fid, score, level);
+        uint256 excess = msg.value - MINT_CELO;
+        if (excess > 0) {
+            (bool ok, ) = payable(msg.sender).call{value: excess}("");
+            require(ok, "refund failed");
         }
-        return 0;
     }
 
-    /**
-     * @notice Score mínimo para entrar no top-10 atual.
-     */
-    function getMinScoreForTop10() external view returns (uint256) {
-        if (topCount < TOP_SIZE) return 1; // ainda há espaço
-        return _top10[topCount - 1].score + 1;
+    function mintScoreStable(uint256 fid, uint256 score, uint256 level, address token)
+        external nonReentrant
+    {
+        uint8 dec = acceptedStable[token];
+        require(dec > 0, "token not accepted");
+        require(score > 0, "score > 0");
+        _register(msg.sender, fid, score, level);
+        IERC20(token).safeTransferFrom(msg.sender, address(this), MINT_STABLE_6);
     }
 
-    /**
-     * @notice Total de CELO acumulado no contrato.
-     */
-    function getBalance() external view returns (uint256) {
-        return address(this).balance;
+    function _register(address player, uint256 fid, uint256 score, uint256 level) internal {
+        allScores.push(ScoreEntry(player, fid, score, level, block.timestamp));
+        uint256 idx = allScores.length - 1;
+        if (score > bestScoreOf[player]) bestScoreOf[player] = score;
+        totalMintsOf[player] += 1;
+        emit ScoreMinted(player, fid, score, level, idx);
     }
 
-    // ───────────────────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  CONTINUE (0.05) — registra o pagamento on-chain
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function continueCELO() external payable nonReentrant {
+        require(msg.value >= CONTINUE_CELO, "pay 0.05 CELO");
+        emit Continued(msg.sender, address(0));
+        uint256 excess = msg.value - CONTINUE_CELO;
+        if (excess > 0) {
+            (bool ok, ) = payable(msg.sender).call{value: excess}("");
+            require(ok, "refund failed");
+        }
+    }
+
+    function continueStable(address token) external nonReentrant {
+        uint8 dec = acceptedStable[token];
+        require(dec > 0, "token not accepted");
+        emit Continued(msg.sender, token);
+        IERC20(token).safeTransferFrom(msg.sender, address(this), CONTINUE_STABLE_6);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  LEITURA (paginada)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    uint256 public constant MAX_PAGE = 200;
+
+    function totalScores() external view returns (uint256) { return allScores.length; }
+
+    function getRecentScores(uint256 count) external view returns (ScoreEntry[] memory) {
+        uint256 total = allScores.length;
+        if (count > MAX_PAGE) count = MAX_PAGE;
+        if (count > total) count = total;
+        ScoreEntry[] memory out = new ScoreEntry[](count);
+        for (uint256 i = 0; i < count; i++) out[i] = allScores[total - 1 - i];
+        return out;
+    }
+
+    function getScores(uint256 start, uint256 count) external view returns (ScoreEntry[] memory) {
+        uint256 total = allScores.length;
+        if (start >= total) return new ScoreEntry[](0);
+        if (count > MAX_PAGE) count = MAX_PAGE;
+        uint256 end = start + count;
+        if (end > total) end = total;
+        ScoreEntry[] memory out = new ScoreEntry[](end - start);
+        for (uint256 i = start; i < end; i++) out[i - start] = allScores[i];
+        return out;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  MIGRAÇÃO opcional (importar scores antigos)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    bool public seedClosed;
+    function seedScores(
+        address[] calldata players, uint256[] calldata fids,
+        uint256[] calldata scores, uint256[] calldata levels, uint256[] calldata timestamps
+    ) external onlyOwner {
+        require(!seedClosed, "seed closed");
+        require(
+            players.length == fids.length && players.length == scores.length &&
+            players.length == levels.length && players.length == timestamps.length, "len mismatch");
+        require(players.length <= MAX_PAGE, "batch too large");
+        for (uint256 i = 0; i < players.length; i++) {
+            require(players[i] != address(0), "zero player");
+            allScores.push(ScoreEntry(players[i], fids[i], scores[i], levels[i], timestamps[i]));
+            uint256 idx = allScores.length - 1;
+            if (scores[i] > bestScoreOf[players[i]]) bestScoreOf[players[i]] = scores[i];
+            totalMintsOf[players[i]] += 1;
+            emit ScoreMinted(players[i], fids[i], scores[i], levels[i], idx);
+        }
+    }
+    function closeSeed() external onlyOwner { seedClosed = true; }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     //  ADMIN
-    // ───────────────────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    function withdraw() external onlyOwner {
+    function setAcceptedStable(address token, uint8 decimals) external onlyOwner {
+        require(token != address(0), "zero token");
+        acceptedStable[token] = decimals;
+    }
+
+    function withdrawCELO() external onlyOwner nonReentrant {
         uint256 bal = address(this).balance;
-        require(bal > 0, "RastaLeaderboard: nothing to withdraw");
+        require(bal > 0, "nothing");
         (bool ok, ) = payable(owner).call{value: bal}("");
-        require(ok, "RastaLeaderboard: withdraw failed");
-        emit Withdrawn(owner, bal);
+        require(ok, "withdraw failed");
+        emit Withdrawn(owner, bal, address(0));
+    }
+
+    function withdrawStable(address token) external onlyOwner nonReentrant {
+        require(token != address(0), "zero token");
+        uint256 bal = IERC20(token).balanceOf(address(this));
+        require(bal > 0, "nothing");
+        IERC20(token).safeTransfer(owner, bal);
+        emit Withdrawn(owner, bal, token);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "RastaLeaderboard: zero address");
+        require(newOwner != address(0), "zero address");
         owner = newOwner;
     }
 
-    // ───────────────────────────────────────────────────────────────────────────
-    //  LÓGICA INTERNA — TOP-10 ORDENADO
-    // ───────────────────────────────────────────────────────────────────────────
-
-    /**
-     * @dev Tenta inserir/atualizar a entrada no top-10.
-     *      Mantém o array ordenado por score decrescente.
-     *      Se a carteira já está no top-10, atualiza seu slot.
-     *      Caso contrário, verifica se o score bate o último colocado.
-     */
-    function _tryInsertTop10(
-        address player,
-        uint256 fid,
-        uint256 score,
-        uint256 level
-    ) internal returns (bool entered) {
-
-        Entry memory newEntry = Entry({
-            player:      player,
-            fid:         fid,
-            score:       score,
-            level:       level,
-            submittedAt: block.timestamp
-        });
-
-        // 1. Verifica se o jogador já está no top-10 → só atualiza o slot dele
-        for (uint8 i = 0; i < topCount; i++) {
-            if (_top10[i].player == player) {
-                _top10[i] = newEntry;
-                _sortFrom(i); // re-sort a partir do slot alterado
-                emit LeaderboardUpdated(i, player, score);
-                return true;
-            }
-        }
-
-        // 2. Ainda há espaço no top-10
-        if (topCount < TOP_SIZE) {
-            _top10[topCount] = newEntry;
-            topCount++;
-            _sortFrom(topCount - 1);
-            emit LeaderboardUpdated(topCount - 1, player, score);
-            return true;
-        }
-
-        // 3. Top-10 cheio → substitui o último se o score for maior
-        if (score > _top10[TOP_SIZE - 1].score) {
-            _top10[TOP_SIZE - 1] = newEntry;
-            _sortFrom(TOP_SIZE - 1);
-            emit LeaderboardUpdated(TOP_SIZE - 1, player, score);
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * @dev Insertion sort a partir de uma posição (borbulha para cima enquanto
-     *      o score do slot atual > score do slot anterior).
-     *      O array é pequeno (≤10), então O(n) é aceitável e econômico em gas.
-     */
-    function _sortFrom(uint8 startIdx) internal {
-        uint8 i = startIdx;
-        while (i > 0 && _top10[i].score > _top10[i - 1].score) {
-            Entry memory tmp = _top10[i - 1];
-            _top10[i - 1] = _top10[i];
-            _top10[i]     = tmp;
-            i--;
-        }
-    }
+    receive() external payable { revert("use mintScoreCELO / continueCELO"); }
 }

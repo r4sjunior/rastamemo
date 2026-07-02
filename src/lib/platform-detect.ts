@@ -2,15 +2,27 @@
 
 type Platform = "minipay" | "farcaster" | "browser";
 
+type EthereumProvider = {
+  isMiniPay?: boolean;
+  isMetaMask?: boolean;
+  request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+};
+
+export function getEthereum(): EthereumProvider | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { ethereum?: EthereumProvider }).ethereum;
+}
+
+export function isMiniPay(): boolean {
+  return Boolean(getEthereum()?.isMiniPay);
+}
+
 export function detectPlatform(): Platform {
   if (typeof window === "undefined") return "browser";
-
-  // MiniPay injeta isMiniPay no provider Celo
-  const eth = (window as any).ethereum;
+  const eth = getEthereum();
   if (eth?.isMiniPay) return "minipay";
-
-  // Farcaster SDK marca window com __farcaster
-  if ((window as any).__farcaster) return "farcaster";
-
+  const w = window as unknown as { __farcaster?: unknown };
+  const inIframe = window.self !== window.top;
+  if (w.__farcaster || (inIframe && navigator.userAgent.includes("Warpcast"))) return "farcaster";
   return "browser";
 }

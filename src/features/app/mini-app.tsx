@@ -4,19 +4,14 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { ShareButton, useFarcasterUser } from "@/neynar-farcaster-sdk/mini";
 import { CARD_POOL, BACK_FACE_URL } from "@/features/app/components/card-data";
 import { LeaderboardOnChain } from "@/features/app/components/leaderboard-onchain";
-import { SubmitScoreWidget } from "@/features/app/components/submit-score-widget";
+import { MusicPlayer } from "@/features/app/components/music-player";
+import { AssetPayWidget } from "@/features/app/components/asset-pay-widget";
 
 const LOGO_URL =
   "https://remix.gg/blob/409848fd-a78f-43b9-bde4-3fd5d7371865/rasta-memo-white-kVSNuM5rtL-gQiXRqVDAa5WYGzTqA9Ec5O9lwScQ2.webp?8HV6";
 
 const BG_URL =
-  "https://remix.gg/blob/409848fd-a78f-43b9-bde4-3fd5d7371865/fundogame-edited-PFb9Qku9gN-zyV5gCodUbsyRmG85uKvJxpDYsMNiQ.webp?HQTc";
-
-const PLAYLIST = [
-  "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/409848fd-a78f-43b9-bde4-3fd5d7371865/Im%20Just%20a%20Chill%20Guy-vV4Ky4X20oUr1kPVb5eRYc9u9Ys2QM.mp3?FKDH",
-  "https://9gfytnfmfqhgc9m3.public.blob.vercel-storage.com/Arcanjo%20Ras%20feat.%20Cryptorasta%20-%20Vai%20Sem%20Medo%20%28Lyric%20Video%29.mp3",
-  "https://9gfytnfmfqhgc9m3.public.blob.vercel-storage.com/CryptoRastas%20Original%20Music%20Theme%20ft.%20DADA%20YUTE.mp3",
-];
+  "https://9gfytnfmfqhgc9m3.public.blob.vercel-storage.com/back%20ground%20-%20rasta%20-%20giunft.gif";
 
 type Card = {
   uid: string;
@@ -92,11 +87,8 @@ export function MiniApp() {
   const [phase, setPhase] = useState<"playing" | "level-complete" | "game-over">("playing");
   const [muted, setMuted] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  // Começa numa faixa aleatória da playlist
-  const [trackIndex, setTrackIndex] = useState(() =>
-    Math.floor(Math.random() * PLAYLIST.length)
-  );
+  // Música começa após a 1ª carta clicada
+  const [gameStarted, setGameStarted] = useState(false);
   const scoreSavedRef = useRef(false);
 
   const { data: user } = useFarcasterUser();
@@ -110,35 +102,8 @@ export function MiniApp() {
     setReady(true);
   }, []);
 
-  function startMusic() {
-    audioRef.current?.play().catch(() => {});
-  }
-
-  // Quando uma música termina, sorteia a próxima (evita repetir a mesma seguida)
-  function handleTrackEnded() {
-    setTrackIndex((prev) => {
-      if (PLAYLIST.length <= 1) return prev;
-      let next = Math.floor(Math.random() * PLAYLIST.length);
-      // se sortear a mesma, pega a seguinte para não repetir
-      if (next === prev) next = (next + 1) % PLAYLIST.length;
-      return next;
-    });
-  }
-
-  // Ao trocar de faixa, carrega e toca a nova (se não estiver no mute)
-  useEffect(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    a.load();
-    if (!muted) a.play().catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackIndex]);
-
   function toggleMute() {
-    const a = audioRef.current;
-    if (!a) return;
-    if (a.paused) { a.play().catch(() => {}); setMuted(false); }
-    else { a.pause(); setMuted(true); }
+    setMuted(m => !m);
   }
 
   const startLevel = useCallback((lvl: number, currentLives?: number) => {
@@ -149,11 +114,25 @@ export function MiniApp() {
     if (currentLives !== undefined) setLives(currentLives);
   }, []);
 
+  // CONTINUE: paga e segue do MESMO ponto exato.
+  // Mantém score, nível e o tabuleiro atual; apenas restaura vidas e volta a jogar.
+  function continueGame() {
+    setErrors(0);
+    setLives(STARTING_LIVES);
+    firstCardRef.current = null;
+    setLock(false);
+    // não reconstrói o deck — mantém as cartas como estavam
+    setCards(prev => prev.map(c => c.matched ? c : { ...c, flipped: false, wrong: false }));
+    setPhase("playing");
+    scoreSavedRef.current = false;
+  }
+
   function flipCard(card: Card) {
     if (lock || card.flipped || card.matched) return;
     if (firstCardRef.current?.uid === card.uid) return;
 
-    if (!muted) startMusic();
+    // Inicia a música na primeira interação do jogador
+    if (!gameStarted) setGameStarted(true);
 
     // Flip the card visually
     setCards(prev =>
@@ -314,13 +293,6 @@ export function MiniApp() {
         }
       `}</style>
 
-      <audio
-        ref={audioRef}
-        src={PLAYLIST[trackIndex]}
-        onEnded={handleTrackEnded}
-        preload="auto"
-      />
-
       {/* CONFETE ao completar nível (cores rasta) */}
       {showConfetti && (
         <div
@@ -461,6 +433,11 @@ export function MiniApp() {
           background: livesColor,
           transition: "width 0.3s, background 0.3s",
         }} />
+      </div>
+
+      {/* NOW PLAYING — música da playlist Audius (nome + artista) */}
+      <div className="relative z-10 shrink-0" style={{ padding: "3px 0" }}>
+        <MusicPlayer isMuted={muted} isStarted={gameStarted} />
       </div>
 
       {/* GAME BOARD */}
@@ -626,7 +603,26 @@ export function MiniApp() {
             </button>
             {phase === "game-over" && (
               <>
-                <SubmitScoreWidget fid={fid} score={score} level={level} />
+                {/* CONTINUE — paga 0.05 e segue do mesmo ponto exato */}
+                <AssetPayWidget
+                  action="continue"
+                  label="▶️ CONTINUE"
+                  price="0.05"
+                  accent="#22c55e"
+                  onSuccess={continueGame}
+                />
+
+                {/* MINT DO SCORE — 0.01, pode mintar várias vezes */}
+                <AssetPayWidget
+                  action="mint"
+                  label="⛓ MINT SCORE"
+                  price="0.01"
+                  accent="#22c55e"
+                  fid={fid}
+                  score={score}
+                  level={level}
+                />
+
                 <button
                   onClick={() => setShowLeaderboard(true)}
                   style={{
