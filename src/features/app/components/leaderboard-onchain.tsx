@@ -58,13 +58,7 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
     for (const e of (oldScores ?? []) as any[]) {
       all.push({ player: e.player, fid: e.fid, score: e.score, level: e.level, timestamp: e.submittedAt ?? 0n });
     }
-    const best = new Map<string, Entry>();
-    for (const e of all) {
-      const k = e.player.toLowerCase();
-      const prev = best.get(k);
-      if (!prev || e.score > prev.score) best.set(k, e);
-    }
-    return Array.from(best.values()).sort((a, b) => (a.score > b.score ? -1 : a.score < b.score ? 1 : 0));
+    return all.sort((a, b) => (a.score > b.score ? -1 : a.score < b.score ? 1 : 0));
   }, [newScores, oldScores]);
 
   const myRank = useMemo(() => {
@@ -92,7 +86,7 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
           <div>
             <div style={{ fontFamily: F, fontSize: "12px", color: "#FFD700" }}>🏆 RANKING</div>
             <div style={{ fontFamily: F, fontSize: "5px", color: "#4CAF50", marginTop: "3px" }}>
-              ⛓ on-chain · Celo · {ranked.length} players
+              ⛓ on-chain · Celo · {ranked.length} scores
             </div>
           </div>
           <button onClick={onClose} style={{
