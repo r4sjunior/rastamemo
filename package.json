@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.30.3",
   "scripts": {
-    "db:push": "[ -z \"$DATABASE_URL\" ] || drizzle-kit push --force --verbose </dev/null",
+    "db:push": "node scripts/db-push.js",
     "build": "next build",
     "clean": "rimraf .next node_modules",
     "cleanup": "node scripts/cleanup.js",
