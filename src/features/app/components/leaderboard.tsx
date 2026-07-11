@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useAudiusPlaylist } from "@/hooks/use-audius-playlist";
 
 type ScoreEntry = {
   id: string;
@@ -19,6 +20,12 @@ export function Leaderboard({ currentFid, onClose }: LeaderboardProps) {
   const [scores, setScores] = useState<ScoreEntry[]>([]);
   const [personalBest, setPersonalBest] = useState<ScoreEntry | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const { tracks: audiusTracks } = useAudiusPlaylist();
+  const soundtrackArtists = useMemo(
+    () => Array.from(new Set(audiusTracks.map(t => t.artist))).join(", "),
+    [audiusTracks],
+  );
 
   const FONT = "'Press Start 2P', monospace";
 
@@ -191,7 +198,96 @@ export function Leaderboard({ currentFid, onClose }: LeaderboardProps) {
             </>
           )}
         </div>
+
+        {/* Credits */}
+        <div
+          style={{
+            flexShrink: 0,
+            marginTop: "4px",
+            paddingTop: "14px",
+            borderTop: "2px solid transparent",
+            borderImage: "linear-gradient(90deg, #e63946, #FFD700, #22c55e) 1",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: FONT,
+              fontSize: "10px",
+              textAlign: "center",
+              letterSpacing: "1px",
+              backgroundImage: "linear-gradient(90deg, #e63946, #FFD700, #22c55e, #FFD700, #e63946)",
+              backgroundSize: "200% auto",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              color: "transparent",
+              animation: "rasta-memo-credits-shine 4s linear infinite",
+            }}
+          >
+            CREDITS
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {[
+              { role: "Lead Developer & Programmer", name: "R4S Júnior", color: "#e63946" },
+              { role: "Art & Asset Design", name: "Cryptorasta", color: "#FFD700" },
+              { role: "Background Animation", name: "Giu_NFT", color: "#22c55e" },
+              {
+                role: "Original Soundtrack",
+                name: soundtrackArtists || "Digital Dubs",
+                color: "#e63946",
+              },
+            ].map(({ role, name, color }) => (
+              <div key={role} style={{ textAlign: "center" }}>
+                <div style={{ fontFamily: FONT, fontSize: "6px", color: "#a3c4a3", marginBottom: "3px" }}>
+                  {role}
+                </div>
+                <div style={{ fontFamily: FONT, fontSize: "8px", color }}>
+                  {name}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div
+            style={{
+              textAlign: "center",
+              marginTop: "4px",
+              padding: "10px",
+              borderRadius: "8px",
+              background: "rgba(255,215,0,0.06)",
+              border: "1px dashed #2d5a2d",
+            }}
+          >
+            <div style={{ fontFamily: FONT, fontSize: "6px", color: "#a3c4a3", marginBottom: "5px" }}>
+              Special Thanks
+            </div>
+            <div
+              style={{
+                fontFamily: FONT,
+                fontSize: "7px",
+                color: "#FFD700",
+                animation: "rasta-memo-credits-pulse 2.4s ease-in-out infinite",
+              }}
+            >
+              &ldquo;The Cryptorasta Community&rdquo;
+            </div>
+          </div>
+        </div>
       </div>
+
+      <style>{`
+        @keyframes rasta-memo-credits-shine {
+          0% { background-position: 0% center; }
+          100% { background-position: 200% center; }
+        }
+        @keyframes rasta-memo-credits-pulse {
+          0%, 100% { opacity: 0.7; text-shadow: 0 0 4px rgba(255,215,0,0.3); }
+          50% { opacity: 1; text-shadow: 0 0 10px rgba(255,215,0,0.7); }
+        }
+      `}</style>
     </div>
   );
 }

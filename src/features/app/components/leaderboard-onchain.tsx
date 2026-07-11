@@ -12,6 +12,13 @@ import {
 } from "@/lib/celo-config";
 import { PlayerName } from "@/features/app/components/player-name";
 
+const SOUNDTRACK_ARTISTS = [
+  "Anthony B", "Arcanjo Ras", "Capleton", "Dada Yute", "DigitalDubs",
+  "DonTuran", "Hibikilla", "Junior Dread", "Macka B", "Ranking Joe",
+  "RootCee", "Sister Nancy", "Sizzla", "Taylor Youth", "TianoBless",
+  "Tuff Like Iron",
+].join("  •  ");
+
 const F = "'Press Start 2P', monospace";
 
 type Entry = {
@@ -67,6 +74,11 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
     return i >= 0 ? i + 1 : null;
   }, [ranked, address]);
 
+  const soundtrackScrollDuration = useMemo(
+    () => Math.max(6, SOUNDTRACK_ARTISTS.length * 0.22),
+    [],
+  );
+
   return (
     <div className="absolute inset-0 z-[60] flex items-center justify-center px-4"
       style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(6px)" }}>
@@ -74,6 +86,9 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
         @keyframes lb-row-in { 0% { opacity: 0; transform: translateY(12px);} 100% { opacity: 1; transform: translateY(0);} }
         @keyframes lb-gold-glow { 0%,100% { box-shadow: 0 0 8px rgba(255,215,0,0.5);} 50% { box-shadow: 0 0 20px rgba(255,215,0,1);} }
         @keyframes lb-podium-in { 0% { opacity: 0; transform: translateY(18px) scale(0.92);} 100% { opacity: 1; transform: translateY(0) scale(1);} }
+        @keyframes rasta-memo-credits-shine { 0% { background-position: 0% center; } 100% { background-position: 200% center; } }
+        @keyframes rasta-memo-credits-marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+        @keyframes rasta-memo-credits-letter { 0%, 100% { color: #e63946; } 33% { color: #FFD700; } 66% { color: #22c55e; } }
       `}</style>
 
       <div style={{
@@ -180,6 +195,74 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
               </div>
             );
           })}
+        </div>
+
+        {/* Credits */}
+        <div style={{
+          flexShrink: 0, marginTop: "4px", paddingTop: "14px",
+          borderTop: "2px solid transparent",
+          borderImage: "linear-gradient(90deg, #e63946, #FFD700, #22c55e) 1",
+          display: "flex", flexDirection: "column", gap: "10px",
+        }}>
+          <div style={{
+            fontFamily: F, fontSize: "10px", textAlign: "center", letterSpacing: "1px",
+            backgroundImage: "linear-gradient(90deg, #e63946, #FFD700, #22c55e, #FFD700, #e63946)",
+            backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text",
+            color: "transparent", animation: "rasta-memo-credits-shine 4s linear infinite",
+          }}>
+            CREDITS
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {[
+              { role: "Lead Developer & Programmer", name: "r4sjunior" },
+              { role: "Art & Asset Design", name: "Cryptorastas" },
+              { role: "Background Animation", name: "Giu_NFT" },
+            ].map(({ role, name }) => (
+              <div key={role} style={{ textAlign: "center" }}>
+                <div style={{ fontFamily: F, fontSize: "6px", color: "#a3c4a3", marginBottom: "3px" }}>
+                  {role}
+                </div>
+                <div style={{ fontFamily: F, fontSize: "8px", color: "#e0e0e0" }}>
+                  {name}
+                </div>
+              </div>
+            ))}
+
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: F, fontSize: "6px", color: "#a3c4a3", marginBottom: "3px" }}>
+                Original Soundtrack
+              </div>
+              <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
+                <span style={{
+                  display: "inline-block", fontFamily: F, fontSize: "8px", color: "#e0e0e0",
+                  paddingLeft: "100%",
+                  animation: `rasta-memo-credits-marquee ${soundtrackScrollDuration}s linear infinite`,
+                }}>
+                  {SOUNDTRACK_ARTISTS}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{
+            textAlign: "center", marginTop: "4px", padding: "10px", borderRadius: "8px",
+            background: "rgba(255,215,0,0.06)", border: "1px dashed #2d5a2d",
+          }}>
+            <div style={{ fontFamily: F, fontSize: "6px", color: "#a3c4a3", marginBottom: "5px" }}>
+              Special Thanks
+            </div>
+            <div style={{ fontFamily: F, fontSize: "7px", display: "flex", justifyContent: "center", flexWrap: "wrap" }}>
+              {'"The Cryptorasta Community"'.split("").map((ch, i) => (
+                <span key={i} style={{
+                  display: "inline-block",
+                  whiteSpace: ch === " " ? "pre" : "normal",
+                  animation: "rasta-memo-credits-letter 1.8s ease-in-out infinite",
+                  animationDelay: `${i * 0.06}s`,
+                }}>{ch}</span>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
