@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useAudiusPlaylist } from "@/hooks/use-audius-playlist";
+import { useEffect, useState } from "react";
 
 type ScoreEntry = {
   id: string;
@@ -21,11 +20,7 @@ export function Leaderboard({ currentFid, onClose }: LeaderboardProps) {
   const [personalBest, setPersonalBest] = useState<ScoreEntry | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const { tracks: audiusTracks } = useAudiusPlaylist();
-  const soundtrackArtists = useMemo(
-    () => Array.from(new Set(audiusTracks.map(t => t.artist))).join(", "),
-    [audiusTracks],
-  );
+  const soundtrackArtists = "Digitaldubs, DadaYute, ArcanjoRas, Taylor Youth";
 
   const FONT = "'Press Start 2P', monospace";
 
@@ -232,7 +227,7 @@ export function Leaderboard({ currentFid, onClose }: LeaderboardProps) {
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {[
               { role: "Lead Developer & Programmer", name: "R4S Júnior", color: "#e63946" },
-              { role: "Art & Asset Design", name: "Cryptorasta", color: "#FFD700" },
+              { role: "Concept & Asset Design", name: "CR_Labs", color: "#FFD700" },
               { role: "Background Animation", name: "Giu_NFT", color: "#22c55e" },
               {
                 role: "Original Soundtrack",

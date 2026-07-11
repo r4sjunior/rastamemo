@@ -13,10 +13,7 @@ import {
 import { PlayerName } from "@/features/app/components/player-name";
 
 const SOUNDTRACK_ARTISTS = [
-  "Anthony B", "Arcanjo Ras", "Capleton", "Dada Yute", "DigitalDubs",
-  "DonTuran", "Hibikilla", "Junior Dread", "Macka B", "Ranking Joe",
-  "RootCee", "Sister Nancy", "Sizzla", "Taylor Youth", "TianoBless",
-  "Tuff Like Iron",
+  "DigitalDubs", "Dada Yute", "Arcanjo Ras", "Taylor Youth",
 ].join("  •  ");
 
 const F = "'Press Start 2P', monospace";
@@ -216,7 +213,7 @@ export function LeaderboardOnChain({ currentFid, onClose }: Props) {
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {[
               { role: "Lead Developer & Programmer", name: "r4sjunior" },
-              { role: "Art & Asset Design", name: "Cryptorastas" },
+              { role: "Concept & Asset Design", name: "CR_Labs" },
               { role: "Background Animation", name: "Giu_NFT" },
             ].map(({ role, name }) => (
               <div key={role} style={{ textAlign: "center" }}>
