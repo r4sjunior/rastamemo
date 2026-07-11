@@ -13,6 +13,9 @@ const LOGO_URL =
 const BG_URL =
   "https://9gfytnfmfqhgc9m3.public.blob.vercel-storage.com/back%20ground%20-%20rasta%20-%20giunft.gif";
 
+const CONTINUE_ANIM_URL =
+  "https://9gfytnfmfqhgc9m3.public.blob.vercel-storage.com/Crypto%20Bitcoin%20GIF%20by%20cryptorastas.gif";
+
 type Card = {
   uid: string;
   src: string;
@@ -87,6 +90,7 @@ export function MiniApp() {
   const [phase, setPhase] = useState<"playing" | "level-complete" | "game-over">("playing");
   const [muted, setMuted] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showContinueAnim, setShowContinueAnim] = useState(false);
   // Música começa após a 1ª carta clicada
   const [gameStarted, setGameStarted] = useState(false);
   const scoreSavedRef = useRef(false);
@@ -125,6 +129,15 @@ export function MiniApp() {
     setCards(prev => prev.map(c => c.matched ? c : { ...c, flipped: false, wrong: false }));
     setPhase("playing");
     scoreSavedRef.current = false;
+  }
+
+  // Toca a animação de "continue pago" antes de voltar ao jogo
+  function playContinueAnim() {
+    setShowContinueAnim(true);
+    setTimeout(() => {
+      setShowContinueAnim(false);
+      continueGame();
+    }, 2200);
   }
 
   function flipCard(card: Card) {
@@ -530,6 +543,23 @@ export function MiniApp() {
         />
       )}
 
+      {/* CONTINUE ANIM — toca após confirmar o pagamento, antes de voltar ao jogo */}
+      {showContinueAnim && (
+        <div
+          className="absolute inset-0 z-[60] flex flex-col items-center justify-center gap-4 px-6"
+          style={{ background: "rgba(0,0,0,0.92)" }}
+        >
+          <img
+            src={CONTINUE_ANIM_URL}
+            alt="Continue"
+            style={{ width: "min(240px, 80vw)", height: "auto", borderRadius: "16px" }}
+          />
+          <div style={{ fontSize: "12px", color: "#FFD700", textAlign: "center" }}>
+            CONTINUE LIBERADO!
+          </div>
+        </div>
+      )}
+
       {/* OVERLAYS */}
       {phase !== "playing" && (
         <div
@@ -609,7 +639,7 @@ export function MiniApp() {
                   label="▶️ CONTINUE"
                   price="0.05"
                   accent="#22c55e"
-                  onSuccess={continueGame}
+                  onSuccess={playContinueAnim}
                 />
 
                 {/* MINT DO SCORE — 0.01, pode mintar várias vezes */}
