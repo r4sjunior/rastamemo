@@ -16,6 +16,9 @@ const BG_URL =
 const CONTINUE_ANIM_URL =
   "https://9gfytnfmfqhgc9m3.public.blob.vercel-storage.com/Crypto%20Bitcoin%20GIF%20by%20cryptorastas.gif";
 
+const MINT_ANIM_URL =
+  "https://9gfytnfmfqhgc9m3.public.blob.vercel-storage.com/Game%20Art%20Sticker%20by%20cryptorastas.gif";
+
 type Card = {
   uid: string;
   src: string;
@@ -91,6 +94,7 @@ export function MiniApp() {
   const [muted, setMuted] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showContinueAnim, setShowContinueAnim] = useState(false);
+  const [showMintAnim, setShowMintAnim] = useState(false);
   // Música começa após a 1ª carta clicada
   const [gameStarted, setGameStarted] = useState(false);
   const scoreSavedRef = useRef(false);
@@ -138,6 +142,12 @@ export function MiniApp() {
       setShowContinueAnim(false);
       continueGame();
     }, 2200);
+  }
+
+  // Toca a animação de comemoração quando o score é confirmado on-chain
+  function playMintAnim() {
+    setShowMintAnim(true);
+    setTimeout(() => setShowMintAnim(false), 2200);
   }
 
   function flipCard(card: Card) {
@@ -560,6 +570,23 @@ export function MiniApp() {
         </div>
       )}
 
+      {/* MINT ANIM — toca após confirmar o registro do score on-chain */}
+      {showMintAnim && (
+        <div
+          className="absolute inset-0 z-[60] flex flex-col items-center justify-center gap-4 px-6"
+          style={{ background: "rgba(0,0,0,0.92)" }}
+        >
+          <img
+            src={MINT_ANIM_URL}
+            alt="Score registrado"
+            style={{ width: "min(240px, 80vw)", height: "auto", borderRadius: "16px" }}
+          />
+          <div style={{ fontSize: "12px", color: "#FFD700", textAlign: "center" }}>
+            SCORE REGISTRADO!
+          </div>
+        </div>
+      )}
+
       {/* OVERLAYS */}
       {phase !== "playing" && (
         <div
@@ -651,6 +678,7 @@ export function MiniApp() {
                   fid={fid}
                   score={score}
                   level={level}
+                  onSuccess={playMintAnim}
                 />
 
                 <button
