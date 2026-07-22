@@ -8,6 +8,6 @@
   "tags": ["game", "memory", "rasta", "reggae", "cards"],
   "splashBackgroundColor": "#1a3a1a",
   "tagline": "Match the vibes, mon!",
-  "requiredChains": [],
+  "requiredChains": ["eip155:42220"],
   "shareButtonTitle": "Play Rasta Memo"
 }
