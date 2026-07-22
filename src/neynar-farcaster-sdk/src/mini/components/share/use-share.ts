@@ -70,7 +70,7 @@ export function useShare() {
         channelKey,
       } = options;
 
-      const fullText = `${text}\n\n☝️ created with @neynar app studio`;
+      const fullText = `${text}\n\n☝️ One Love inna Decentralized Style `;
 
       // Build the share URL using the production domain from publicConfig
       let shareUrl = path
